@@ -1,0 +1,13 @@
+
+// This program tests the evaluation of the unary minus
+
+def negatives ()
+begin
+    var a,b
+    a := 100
+    b := 20
+    print "a is", a, "and b is", b
+    print "a/(-b) is", a / -b
+    print "10/(-2) is", 10 / (-2)
+    return 0
+end

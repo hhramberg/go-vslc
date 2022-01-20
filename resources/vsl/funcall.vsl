@@ -1,0 +1,32 @@
+
+// This program tests activation records, deftion call and return
+
+def defall ()
+begin
+    var x,y,z
+    x := 5
+    y := 10
+    print "Calling my_deftion with parameters", x, y
+    z := my_deftion ( x, y )
+    print "The returned result is", z
+    z := my_other_deftion ()
+    print "The other returned result is", z
+    return 0
+end
+
+def my_deftion ( s, t )
+begin
+    var u
+    u := s*s + t*t
+    print "Parameter s is", s
+    print "Parameter t is", t
+    print "The sum of their squares is", u
+    return u
+end
+
+def my_other_deftion ()
+begin
+    var x
+    x := 42
+    return x
+end

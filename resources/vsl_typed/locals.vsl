@@ -1,0 +1,20 @@
+
+// This program tests the evaluation of local scopes
+
+var i,j,k int
+
+def nesting_scopes ( x, y, z ) int
+begin
+    var a,b int
+    var c,d int
+    a := 21
+    begin
+        var e,f int
+        var a,b int
+        a := 42
+        print "Inner a is ", a
+    end
+    print "Outer a is ", a
+    print "Global k is ", k
+    return 0
+end

@@ -1,0 +1,31 @@
+// Function list
+def f()
+begin
+    return 0
+end
+
+def g(a,b,c) // Variable list
+begin
+    // Declaration list
+    var u,v,w
+    var x,y,z
+
+    // Statement list
+    u := 1
+    v := 2
+    w := g ( x+1, y+2, z+3 )    // Expression list
+    print u, v, w               // Print list
+    return 0
+end
+
+def h(a,b)
+begin
+    var x
+    x := 2+3
+    x := 3-2
+    x := 2*2
+    x := 4/2
+    x := -6
+    x := (2+3)*4/5
+    return 0
+end

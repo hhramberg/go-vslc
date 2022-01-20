@@ -1,0 +1,21 @@
+def hello ()
+begin
+    var t
+    t := test ( 42 )
+    return 0
+end
+
+def test ( a )
+begin
+    var x,y
+    x := 32
+    y := 20
+    print "Outer x is", x, "y is", y, "parm is", a
+    begin
+        var x
+        x := 64
+        print "Inner x is",x, "y is", y, "parm is", a
+    end
+    print "Outer x is",x, "y is", y, "parm is", a
+    return 0
+end

@@ -1,0 +1,21 @@
+def dingdong ( a, b, c, d, e, f, g )
+begin
+    var x
+    x := 42
+    print a, b, c, d, e, f, g
+    if x = 42 then
+    begin
+        print "Equal!"
+        x := 43
+    end
+    else
+    begin
+        x := 44
+    end
+    while x > 0 do
+    begin
+        print x
+        x := x-1
+    end
+    return x
+end

@@ -1,0 +1,21 @@
+
+// This program tests the evaluation of the unary minus
+
+def bitwise_operators ( a, b )
+begin
+    var c
+    print "a is", a, "and b is", b
+    c := ~ a
+    print "~", a,"=", c
+    c := a | b
+    print a,"|",b,"=",c
+    c := a ^ b
+    print a,"^",b,"=",c
+    c := a & b
+    print a,"&",b,"=",c
+    c := a << b
+    print a,"<<",b,"=",c
+    c := a >> b
+    print a,">>",b,"=",c
+    return 0
+end

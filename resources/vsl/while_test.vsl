@@ -1,0 +1,24 @@
+
+// This program is a simple test of while loops, counting down from 19 to 0
+// and skipping 10 (if continue is implemented)
+
+def while_test ()
+begin
+    var a
+    a := 20
+    print a
+    if a > 0 then print "foobar"
+    while a > 0 do
+    begin
+        if a = 10 then
+        begin
+            a := a - 1
+            print "Skip..."
+            continue
+        end
+        else
+            a := a - 1
+        print a
+    end
+    return 0
+end

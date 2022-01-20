@@ -1,0 +1,60 @@
+Defined types:
+
+DATATYPE    BIT SIZE    ABBREVIATION
+integer     64          int
+float       64          float
+boolean     64          bool
+
+
+With regard to expressions:
+
+OPERATION           RESULT
+int + int           int
+int - int           int
+int * int           int
+int / int           int
+int % int           int
+int ^ int           int
+int | int           int
+int & int           int
+int % int           int
+int << int          int
+int >> int          int
+~int                int
+
+int + float          float
+int - float          float
+int * float          float
+int / float          float
+int % float          Not allowed
+int ^ float          Not allowed
+int | float          Not allowed
+int & float          Not allowed
+int % float          Not allowed
+int << float         Not allowed
+int >> float         Not allowed
+
+float + int          float
+float - int          float
+float * int          float
+float / int          float
+float % int          Not allowed
+float ^ int          Not allowed
+float | int          Not allowed
+float & int          Not allowed
+float % int          Not allowed
+float << int         Not allowed
+float >> int         Not allowed
+
+float + float        float
+float - float        float
+float * float        float
+float / float        float
+float % float        Not allowed
+float ^ float        Not allowed
+float | float        Not allowed
+float & float        Not allowed
+float % float        Not allowed
+float << float       Not allowed
+float >> float       Not allowed
+~float               Not allowed

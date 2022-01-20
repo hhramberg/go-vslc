@@ -1,0 +1,30 @@
+def main ( a )
+begin
+    var x, y, z
+    print "Testing plain call/return and expression evaluation"
+    x := 15
+    z := 5
+    y := test ( x, z )
+    print "The deftion returned y:=", y
+    return 0
+end
+
+def test ( a, b )
+begin
+    var c
+
+    // Test local scope, assignment of various expressions
+    print "My parameters are a:=", a, "and b:=", b
+    c := a + b
+    print "Their sum is c:=", c
+    c := a - b
+    print "Their difference is c:=", c
+    c := a * b
+    print "Their product is c:=", c
+    c := a / b
+    print "Their ratio is c:=", c
+
+    print "(-c):=", (-c)
+    print "The sum of their squares is ", (a*a+b*b)
+    return a-b
+end

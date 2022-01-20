@@ -1,0 +1,8 @@
+def test( a )
+begin
+    print a
+    if a > 10 then print "Bigger"
+    if a < 10 then print "Smaller"
+    if a = 10 then print "Equal"
+    return 0
+end

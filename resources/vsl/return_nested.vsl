@@ -1,0 +1,18 @@
+def hello ()
+begin
+    print "t is", test ( 64 )
+    return 0
+end
+
+def test ( a )
+begin
+    var x,y
+    x := 32
+    y := 20
+    begin
+        var x
+        x := 64
+        return x+a
+        print "This never executes"
+    end
+end

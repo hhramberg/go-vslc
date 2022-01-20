@@ -1,0 +1,25 @@
+def fibonacci_iterative( n )
+begin
+    var w, x, y, f
+    w := n
+    x := 1
+    y := 1
+    f := 1
+
+    if w > 0 then
+    begin
+        if w > 1 then
+            if w > 2 then
+                while w > 3 do
+                begin
+                    f := y + x
+                    x := y
+                    y := f
+                    w := w - 1
+                end
+    end
+    else
+        f := 0
+    print "Fibonacci number #",n,"is",f
+    return 0
+end

@@ -1,0 +1,32 @@
+def start ()
+begin
+    var x
+    print "Nested scopes coming up..."
+    x := test_me ( 1 )
+    print "x:=",x
+    return 0
+end
+
+def test_me ( a )
+begin
+    print "Parameter a is a:=", a
+    begin
+        var a
+        a := 2
+        print "Outer scope has a:=", a
+        begin
+            var b
+            var a
+            a := 3
+            b := 4
+            begin
+                print "Inner scope has a:=", a, "and b:=", b
+                b := 5
+            end
+            print "b was updated to ",b,"in inner scope"
+        end 
+        print "Outer scope (still) has a:=",a
+    end
+    print "Return expression (a-1) using a:=", a
+    return a-1
+end

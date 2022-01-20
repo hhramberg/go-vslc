@@ -1,0 +1,1417 @@
+
+state 0
+	$accept: .program $end 
+
+	DEF  shift 6
+	VAR  shift 7
+	.  error
+
+	program  goto 1
+	global_list  goto 2
+	global  goto 3
+	function  goto 4
+	declaration  goto 5
+
+state 1
+	$accept:  program.$end 
+
+	$end  accept
+	.  error
+
+
+state 2
+	program:  global_list.    (1)
+	global_list:  global_list.global 
+
+	DEF  shift 6
+	VAR  shift 7
+	.  reduce 1 (src line 40)
+
+	global  goto 8
+	function  goto 4
+	declaration  goto 5
+
+state 3
+	global_list:  global.    (2)
+
+	.  reduce 2 (src line 42)
+
+
+state 4
+	global:  function.    (4)
+
+	.  reduce 4 (src line 45)
+
+
+state 5
+	global:  declaration.    (5)
+
+	.  reduce 5 (src line 46)
+
+
+state 6
+	function:  DEF.identifier '(' parameter_list ')' type statement 
+
+	IDENTIFIER  shift 10
+	.  error
+
+	identifier  goto 9
+
+state 7
+	declaration:  VAR.variable_list type 
+
+	IDENTIFIER  shift 10
+	.  error
+
+	variable_list  goto 11
+	identifier  goto 12
+
+state 8
+	global_list:  global_list global.    (3)
+
+	.  reduce 3 (src line 43)
+
+
+state 9
+	function:  DEF identifier.'(' parameter_list ')' type statement 
+
+	'('  shift 13
+	.  error
+
+
+state 10
+	identifier:  IDENTIFIER.    (60)
+
+	.  reduce 60 (src line 123)
+
+
+state 11
+	variable_list:  variable_list.',' identifier 
+	declaration:  VAR variable_list.type 
+
+	TYPE  shift 16
+	','  shift 14
+	.  error
+
+	type  goto 15
+
+state 12
+	variable_list:  identifier.    (13)
+
+	.  reduce 13 (src line 59)
+
+
+state 13
+	function:  DEF identifier '('.parameter_list ')' type statement 
+	parameter_list: .    (19)
+
+	IDENTIFIER  shift 10
+	.  reduce 19 (src line 67)
+
+	typed_variable_list  goto 18
+	variable_list  goto 19
+	identifier  goto 12
+	parameter_list  goto 17
+
+state 14
+	variable_list:  variable_list ','.identifier 
+
+	IDENTIFIER  shift 10
+	.  error
+
+	identifier  goto 20
+
+state 15
+	declaration:  VAR variable_list type.    (57)
+
+	.  reduce 57 (src line 118)
+
+
+state 16
+	type:  TYPE.    (64)
+
+	.  reduce 64 (src line 130)
+
+
+state 17
+	parameter_list:  parameter_list.',' typed_variable_list 
+	function:  DEF identifier '(' parameter_list.')' type statement 
+
+	','  shift 21
+	')'  shift 22
+	.  error
+
+
+state 18
+	parameter_list:  typed_variable_list.    (17)
+
+	.  reduce 17 (src line 65)
+
+
+state 19
+	typed_variable_list:  variable_list.type 
+	variable_list:  variable_list.',' identifier 
+
+	TYPE  shift 16
+	','  shift 14
+	.  error
+
+	type  goto 23
+
+state 20
+	variable_list:  variable_list ',' identifier.    (14)
+
+	.  reduce 14 (src line 60)
+
+
+state 21
+	parameter_list:  parameter_list ','.typed_variable_list 
+
+	IDENTIFIER  shift 10
+	.  error
+
+	typed_variable_list  goto 24
+	variable_list  goto 19
+	identifier  goto 12
+
+state 22
+	function:  DEF identifier '(' parameter_list ')'.type statement 
+
+	TYPE  shift 16
+	.  error
+
+	type  goto 25
+
+state 23
+	typed_variable_list:  variable_list type.    (12)
+
+	.  reduce 12 (src line 57)
+
+
+state 24
+	parameter_list:  parameter_list ',' typed_variable_list.    (18)
+
+	.  reduce 18 (src line 66)
+
+
+state 25
+	function:  DEF identifier '(' parameter_list ')' type.statement 
+
+	BEGIN  shift 40
+	RETURN  shift 35
+	PRINT  shift 36
+	IF  shift 37
+	WHILE  shift 38
+	CONTINUE  shift 39
+	IDENTIFIER  shift 10
+	.  error
+
+	statement  goto 26
+	identifier  goto 34
+	assign_statement  goto 27
+	return_statement  goto 28
+	print_statement  goto 29
+	if_statement  goto 30
+	while_statement  goto 31
+	null_statement  goto 32
+	block  goto 33
+
+state 26
+	function:  DEF identifier '(' parameter_list ')' type statement.    (22)
+
+	.  reduce 22 (src line 72)
+
+
+state 27
+	statement:  assign_statement.    (23)
+
+	.  reduce 23 (src line 74)
+
+
+state 28
+	statement:  return_statement.    (24)
+
+	.  reduce 24 (src line 75)
+
+
+state 29
+	statement:  print_statement.    (25)
+
+	.  reduce 25 (src line 76)
+
+
+state 30
+	statement:  if_statement.    (26)
+
+	.  reduce 26 (src line 77)
+
+
+state 31
+	statement:  while_statement.    (27)
+
+	.  reduce 27 (src line 78)
+
+
+state 32
+	statement:  null_statement.    (28)
+
+	.  reduce 28 (src line 79)
+
+
+state 33
+	statement:  block.    (29)
+
+	.  reduce 29 (src line 80)
+
+
+state 34
+	assign_statement:  identifier.ASSIGN expression 
+
+	ASSIGN  shift 41
+	.  error
+
+
+state 35
+	return_statement:  RETURN.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 42
+	identifier  goto 47
+	number  goto 46
+
+state 36
+	print_statement:  PRINT.print_list 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	STRING  shift 54
+	'('  shift 45
+	.  error
+
+	print_list  goto 50
+	print_item  goto 51
+	expression  goto 52
+	identifier  goto 47
+	number  goto 46
+	string  goto 53
+
+state 37
+	if_statement:  IF.relation THEN statement 
+	if_statement:  IF.relation THEN statement ELSE statement 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 56
+	identifier  goto 47
+	relation  goto 55
+	number  goto 46
+
+state 38
+	while_statement:  WHILE.relation DO statement 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 56
+	identifier  goto 47
+	relation  goto 57
+	number  goto 46
+
+state 39
+	null_statement:  CONTINUE.    (35)
+
+	.  reduce 35 (src line 91)
+
+
+state 40
+	block:  BEGIN.declaration_list statement_list END 
+	block:  BEGIN.statement_list END 
+
+	BEGIN  shift 40
+	RETURN  shift 35
+	PRINT  shift 36
+	IF  shift 37
+	WHILE  shift 38
+	CONTINUE  shift 39
+	VAR  shift 7
+	IDENTIFIER  shift 10
+	.  error
+
+	declaration  goto 60
+	statement_list  goto 59
+	statement  goto 61
+	identifier  goto 34
+	declaration_list  goto 58
+	assign_statement  goto 27
+	return_statement  goto 28
+	print_statement  goto 29
+	if_statement  goto 30
+	while_statement  goto 31
+	null_statement  goto 32
+	block  goto 33
+
+state 41
+	assign_statement:  identifier ASSIGN.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 62
+	identifier  goto 47
+	number  goto 46
+
+state 42
+	return_statement:  RETURN expression.    (33)
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'|'  shift 67
+	'^'  shift 68
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 33 (src line 87)
+
+
+state 43
+	expression:  '-'.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 72
+	identifier  goto 47
+	number  goto 46
+
+state 44
+	expression:  '~'.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 73
+	identifier  goto 47
+	number  goto 46
+
+state 45
+	expression:  '('.expression ')' 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 74
+	identifier  goto 47
+	number  goto 46
+
+state 46
+	expression:  number.    (54)
+
+	.  reduce 54 (src line 114)
+
+
+state 47
+	expression:  identifier.    (55)
+	expression:  identifier.'(' argument_list ')' 
+
+	'('  shift 75
+	.  reduce 55 (src line 115)
+
+
+state 48
+	number:  INTEGER.    (61)
+
+	.  reduce 61 (src line 125)
+
+
+state 49
+	number:  FLOAT.    (62)
+
+	.  reduce 62 (src line 126)
+
+
+state 50
+	print_list:  print_list.',' print_item 
+	print_statement:  PRINT print_list.    (34)
+
+	','  shift 76
+	.  reduce 34 (src line 89)
+
+
+state 51
+	print_list:  print_item.    (8)
+
+	.  reduce 8 (src line 51)
+
+
+state 52
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+	print_item:  expression.    (58)
+
+	'|'  shift 67
+	'^'  shift 68
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 58 (src line 120)
+
+
+state 53
+	print_item:  string.    (59)
+
+	.  reduce 59 (src line 121)
+
+
+state 54
+	string:  STRING.    (63)
+
+	.  reduce 63 (src line 128)
+
+
+state 55
+	if_statement:  IF relation.THEN statement 
+	if_statement:  IF relation.THEN statement ELSE statement 
+
+	THEN  shift 77
+	.  error
+
+
+state 56
+	relation:  expression.'=' expression 
+	relation:  expression.'<' expression 
+	relation:  expression.'>' expression 
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'|'  shift 67
+	'^'  shift 68
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	'='  shift 78
+	'<'  shift 79
+	'>'  shift 80
+	.  error
+
+
+state 57
+	while_statement:  WHILE relation.DO statement 
+
+	DO  shift 81
+	.  error
+
+
+state 58
+	declaration_list:  declaration_list.declaration 
+	block:  BEGIN declaration_list.statement_list END 
+
+	BEGIN  shift 40
+	RETURN  shift 35
+	PRINT  shift 36
+	IF  shift 37
+	WHILE  shift 38
+	CONTINUE  shift 39
+	VAR  shift 7
+	IDENTIFIER  shift 10
+	.  error
+
+	declaration  goto 82
+	statement_list  goto 83
+	statement  goto 61
+	identifier  goto 34
+	assign_statement  goto 27
+	return_statement  goto 28
+	print_statement  goto 29
+	if_statement  goto 30
+	while_statement  goto 31
+	null_statement  goto 32
+	block  goto 33
+
+state 59
+	statement_list:  statement_list.statement 
+	block:  BEGIN statement_list.END 
+
+	BEGIN  shift 40
+	END  shift 85
+	RETURN  shift 35
+	PRINT  shift 36
+	IF  shift 37
+	WHILE  shift 38
+	CONTINUE  shift 39
+	IDENTIFIER  shift 10
+	.  error
+
+	statement  goto 84
+	identifier  goto 34
+	assign_statement  goto 27
+	return_statement  goto 28
+	print_statement  goto 29
+	if_statement  goto 30
+	while_statement  goto 31
+	null_statement  goto 32
+	block  goto 33
+
+state 60
+	declaration_list:  declaration.    (20)
+
+	.  reduce 20 (src line 69)
+
+
+state 61
+	statement_list:  statement.    (6)
+
+	.  reduce 6 (src line 48)
+
+
+state 62
+	assign_statement:  identifier ASSIGN expression.    (32)
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'|'  shift 67
+	'^'  shift 68
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 32 (src line 85)
+
+
+state 63
+	expression:  expression '+'.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 86
+	identifier  goto 47
+	number  goto 46
+
+state 64
+	expression:  expression '-'.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 87
+	identifier  goto 47
+	number  goto 46
+
+state 65
+	expression:  expression '*'.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 88
+	identifier  goto 47
+	number  goto 46
+
+state 66
+	expression:  expression '/'.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 89
+	identifier  goto 47
+	number  goto 46
+
+state 67
+	expression:  expression '|'.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 90
+	identifier  goto 47
+	number  goto 46
+
+state 68
+	expression:  expression '^'.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 91
+	identifier  goto 47
+	number  goto 46
+
+state 69
+	expression:  expression '&'.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 92
+	identifier  goto 47
+	number  goto 46
+
+state 70
+	expression:  expression LSHIFT.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 93
+	identifier  goto 47
+	number  goto 46
+
+state 71
+	expression:  expression RSHIFT.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 94
+	identifier  goto 47
+	number  goto 46
+
+state 72
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+	expression:  '-' expression.    (51)
+
+	.  reduce 51 (src line 111)
+
+
+state 73
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+	expression:  '~' expression.    (52)
+
+	.  reduce 52 (src line 112)
+
+
+state 74
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+	expression:  '(' expression.')' 
+
+	'|'  shift 67
+	'^'  shift 68
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	')'  shift 95
+	.  error
+
+
+state 75
+	expression:  identifier '('.argument_list ')' 
+	argument_list: .    (16)
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  reduce 16 (src line 63)
+
+	expression_list  goto 97
+	expression  goto 98
+	identifier  goto 47
+	argument_list  goto 96
+	number  goto 46
+
+state 76
+	print_list:  print_list ','.print_item 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	STRING  shift 54
+	'('  shift 45
+	.  error
+
+	print_item  goto 99
+	expression  goto 52
+	identifier  goto 47
+	number  goto 46
+	string  goto 53
+
+state 77
+	if_statement:  IF relation THEN.statement 
+	if_statement:  IF relation THEN.statement ELSE statement 
+
+	BEGIN  shift 40
+	RETURN  shift 35
+	PRINT  shift 36
+	IF  shift 37
+	WHILE  shift 38
+	CONTINUE  shift 39
+	IDENTIFIER  shift 10
+	.  error
+
+	statement  goto 100
+	identifier  goto 34
+	assign_statement  goto 27
+	return_statement  goto 28
+	print_statement  goto 29
+	if_statement  goto 30
+	while_statement  goto 31
+	null_statement  goto 32
+	block  goto 33
+
+state 78
+	relation:  expression '='.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 101
+	identifier  goto 47
+	number  goto 46
+
+state 79
+	relation:  expression '<'.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 102
+	identifier  goto 47
+	number  goto 46
+
+state 80
+	relation:  expression '>'.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 103
+	identifier  goto 47
+	number  goto 46
+
+state 81
+	while_statement:  WHILE relation DO.statement 
+
+	BEGIN  shift 40
+	RETURN  shift 35
+	PRINT  shift 36
+	IF  shift 37
+	WHILE  shift 38
+	CONTINUE  shift 39
+	IDENTIFIER  shift 10
+	.  error
+
+	statement  goto 104
+	identifier  goto 34
+	assign_statement  goto 27
+	return_statement  goto 28
+	print_statement  goto 29
+	if_statement  goto 30
+	while_statement  goto 31
+	null_statement  goto 32
+	block  goto 33
+
+state 82
+	declaration_list:  declaration_list declaration.    (21)
+
+	.  reduce 21 (src line 70)
+
+
+state 83
+	statement_list:  statement_list.statement 
+	block:  BEGIN declaration_list statement_list.END 
+
+	BEGIN  shift 40
+	END  shift 105
+	RETURN  shift 35
+	PRINT  shift 36
+	IF  shift 37
+	WHILE  shift 38
+	CONTINUE  shift 39
+	IDENTIFIER  shift 10
+	.  error
+
+	statement  goto 84
+	identifier  goto 34
+	assign_statement  goto 27
+	return_statement  goto 28
+	print_statement  goto 29
+	if_statement  goto 30
+	while_statement  goto 31
+	null_statement  goto 32
+	block  goto 33
+
+state 84
+	statement_list:  statement_list statement.    (7)
+
+	.  reduce 7 (src line 49)
+
+
+state 85
+	block:  BEGIN statement_list END.    (31)
+
+	.  reduce 31 (src line 83)
+
+
+state 86
+	expression:  expression.'+' expression 
+	expression:  expression '+' expression.    (42)
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 42 (src line 102)
+
+
+state 87
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression '-' expression.    (43)
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 43 (src line 103)
+
+
+state 88
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression '*' expression.    (44)
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	.  reduce 44 (src line 104)
+
+
+state 89
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression '/' expression.    (45)
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	.  reduce 45 (src line 105)
+
+
+state 90
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression '|' expression.    (46)
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'^'  shift 68
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 46 (src line 106)
+
+
+state 91
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression '^' expression.    (47)
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 47 (src line 107)
+
+
+state 92
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression '&' expression.    (48)
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 48 (src line 108)
+
+
+state 93
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression LSHIFT expression.    (49)
+	expression:  expression.RSHIFT expression 
+
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 49 (src line 109)
+
+
+state 94
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+	expression:  expression RSHIFT expression.    (50)
+
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 50 (src line 110)
+
+
+state 95
+	expression:  '(' expression ')'.    (53)
+
+	.  reduce 53 (src line 113)
+
+
+state 96
+	expression:  identifier '(' argument_list.')' 
+
+	')'  shift 106
+	.  error
+
+
+state 97
+	expression_list:  expression_list.',' expression 
+	argument_list:  expression_list.    (15)
+
+	','  shift 107
+	.  reduce 15 (src line 62)
+
+
+state 98
+	expression_list:  expression.    (10)
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'|'  shift 67
+	'^'  shift 68
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 10 (src line 54)
+
+
+state 99
+	print_list:  print_list ',' print_item.    (9)
+
+	.  reduce 9 (src line 52)
+
+
+state 100
+	if_statement:  IF relation THEN statement.    (36)
+	if_statement:  IF relation THEN statement.ELSE statement 
+
+	ELSE  shift 108
+	.  reduce 36 (src line 93)
+
+
+state 101
+	relation:  expression '=' expression.    (39)
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'|'  shift 67
+	'^'  shift 68
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 39 (src line 98)
+
+
+state 102
+	relation:  expression '<' expression.    (40)
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'|'  shift 67
+	'^'  shift 68
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 40 (src line 99)
+
+
+state 103
+	relation:  expression '>' expression.    (41)
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'|'  shift 67
+	'^'  shift 68
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 41 (src line 100)
+
+
+state 104
+	while_statement:  WHILE relation DO statement.    (38)
+
+	.  reduce 38 (src line 96)
+
+
+state 105
+	block:  BEGIN declaration_list statement_list END.    (30)
+
+	.  reduce 30 (src line 82)
+
+
+state 106
+	expression:  identifier '(' argument_list ')'.    (56)
+
+	.  reduce 56 (src line 116)
+
+
+state 107
+	expression_list:  expression_list ','.expression 
+
+	'-'  shift 43
+	'~'  shift 44
+	INTEGER  shift 48
+	FLOAT  shift 49
+	IDENTIFIER  shift 10
+	'('  shift 45
+	.  error
+
+	expression  goto 109
+	identifier  goto 47
+	number  goto 46
+
+state 108
+	if_statement:  IF relation THEN statement ELSE.statement 
+
+	BEGIN  shift 40
+	RETURN  shift 35
+	PRINT  shift 36
+	IF  shift 37
+	WHILE  shift 38
+	CONTINUE  shift 39
+	IDENTIFIER  shift 10
+	.  error
+
+	statement  goto 110
+	identifier  goto 34
+	assign_statement  goto 27
+	return_statement  goto 28
+	print_statement  goto 29
+	if_statement  goto 30
+	while_statement  goto 31
+	null_statement  goto 32
+	block  goto 33
+
+state 109
+	expression_list:  expression_list ',' expression.    (11)
+	expression:  expression.'+' expression 
+	expression:  expression.'-' expression 
+	expression:  expression.'*' expression 
+	expression:  expression.'/' expression 
+	expression:  expression.'|' expression 
+	expression:  expression.'^' expression 
+	expression:  expression.'&' expression 
+	expression:  expression.LSHIFT expression 
+	expression:  expression.RSHIFT expression 
+
+	'|'  shift 67
+	'^'  shift 68
+	'&'  shift 69
+	LSHIFT  shift 70
+	RSHIFT  shift 71
+	'+'  shift 63
+	'-'  shift 64
+	'*'  shift 65
+	'/'  shift 66
+	.  reduce 11 (src line 55)
+
+
+state 110
+	if_statement:  IF relation THEN statement ELSE statement.    (37)
+
+	.  reduce 37 (src line 94)
+
+
+38 terminals, 29 nonterminals
+65 grammar rules, 111/16000 states
+0 shift/reduce, 0 reduce/reduce conflicts reported
+78 working sets used
+memory: parser 224/240000
+75 extra closures
+352 shift entries, 1 exceptions
+78 goto entries
+99 entries saved by goto default
+Optimizer space used: output 207/240000
+207 table entries, 10 zero
+maximum spread: 38, maximum offset: 108

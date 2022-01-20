@@ -1,0 +1,18 @@
+def escapecodes ()
+begin
+    var a,b
+    print
+"Testing if printf format codes are left alone.",
+"\nOutput *should* contain percent characters, but no integers."
+    a := 64
+    b := 42
+    print "\tHello, world! %d %d"
+
+    print
+"Adding a splash of ANSI color codes - This will only work in a color terminal"
+    print "\t\033[31mRed"
+    print "\t\033[32mGreen"
+    print "\t\033[34mBlue", "\033[0m"
+
+    return 0
+end

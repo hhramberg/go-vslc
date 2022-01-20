@@ -1,0 +1,37 @@
+var w,x,y,z
+
+def hello ()
+begin
+//    print "Hello,", "world!"
+//    print "How", "are", "you?"
+//    print 42, 43, 44
+//    x := 30
+//    y := -15
+//    z := (x*x)+(y*y)
+//    print "x + y :=", x+y
+//    print "x - y :=", x-y
+//    print "x * y :=", x*y
+//    print "x / y :=", x/y
+      w := goodbye( 1, 2, 3, 4, 5, 6, 7, 8 )
+      print w
+    return w
+end
+
+def tralala (wang)
+begin
+    var x,y,z,w
+    x := 3
+    y := 5
+    z := 2
+    w := 4
+    wang := 42
+    print wang,x*y,z*w
+    return 1
+end
+
+def goodbye ( a, b, c, d, e, f, g, h )
+begin
+    print a,b,c,d,e,f,g,h
+    print "Morna"
+    return tralala(1)
+end

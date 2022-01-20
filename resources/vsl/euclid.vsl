@@ -1,0 +1,20 @@
+def euclid ( a, b )
+begin
+    if a < 0 then a := -a
+    if b < 0 then b := -b
+    if gcd ( a, b ) > 1 then
+        print "Greatest common divisor of", a, "and", b, "is", gcd ( a, b )
+    else
+        print a, "and", b, "are relative primes"
+    return 0
+end
+
+def gcd( a, b )
+begin
+    var g
+    if b > 0 then
+        g := gcd ( b, a - ((a/b)*b) )
+    else
+        g := a
+    return g
+end

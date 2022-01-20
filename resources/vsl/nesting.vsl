@@ -1,0 +1,30 @@
+def hello ()
+begin
+    var x
+    print "Hello, world!"
+    x := test_me ( 42 )
+    print "x:=",x
+    return 0
+end
+
+def test_me ( a )
+begin
+    begin
+        var a
+        a := 32
+        print "Outer scope has a:=",a
+        begin
+            var b
+            var a
+            a := 64
+            b := 27
+            begin
+                print "I have a:=",a, "and b:=", b
+                b := 128
+            end
+            print "B was reassigned to ",b,"in inner"
+        end 
+        print "Outer scope has a:=",a
+    end
+    return a+1
+end

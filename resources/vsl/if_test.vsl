@@ -1,0 +1,21 @@
+
+// This program is a simple test of conditionals, including nesting
+
+def while_test ()
+begin
+    var a,b
+    a := 10
+    b := -15
+    print a
+    if a = 10 then
+        print "A equals 10"
+
+    if a > 0 then
+    begin
+        if b > -15 then
+            print "B is greater than -15"
+        else
+            print "B is smaller than or equal to -15"
+    end
+    return 0
+end

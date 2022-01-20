@@ -1,0 +1,26 @@
+// VSL version of prime assembly exercise, courtesy
+// of J.H.Ø. Anthony (class of 2011)
+
+def main ()
+begin
+    return factor (1836311903)
+end
+
+def factor (n)
+begin
+    var f
+
+    f := n/2
+    while (n - f*(n/f)) > 0 do
+        f := f - 1
+    if (f - 1) > 0 then
+    begin
+        var r
+        r := factor (f)
+        r := factor (n/f)
+    end
+    else
+        print n, "is a prime factor"
+
+    return 0
+end
