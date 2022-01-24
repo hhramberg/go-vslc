@@ -5,6 +5,11 @@ integer     64          int
 float       64          float
 boolean     64          bool
 
+With regard to assignment:
+
+ASSIGNMENT          RESULT
+int := float        Not allowed
+float := int        float
 
 With regard to expressions:
 
@@ -58,3 +63,39 @@ float % float        Not allowed
 float << float       Not allowed
 float >> float       Not allowed
 ~float               Not allowed
+
+With regard to relation:
+
+RELATION            RESULT
+
+int && int          int
+int || int          int
+int < int           int
+int > int           int
+int >= int          int
+int <= int          int
+int = int           int
+
+float && float      ???
+float || float      ???
+float < float       ???
+float > float       ???
+float >= float      ???
+float <= float      ???
+float = float       ???
+
+int && float        ???
+int || float        ???
+int < float         ???
+int > float         ???
+int >= float        ???
+int <= float        ???
+int = float         ???
+
+float && int        ???
+float || int        ???
+float < int         ???
+float > int         ???
+float >= int        ???
+float <= int        ???
+float = int         ???

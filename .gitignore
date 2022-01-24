@@ -22,3 +22,6 @@ go.work
 
 # Build/output executable compiled and put in local project structure.
 /build/
+
+# JetBrains IDE
+.idea/

@@ -59,6 +59,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Validate source code.
+	if err := ir.ValidateTree(opt); err != nil {
+		fmt.Printf("Source code error: %s", err)
+		os.Exit(1)
+	}
+
 	// Initiate output writer.
 	if len(opt.Out) > 0 {
 		// Attempt to open output file. Create new file if necessary.

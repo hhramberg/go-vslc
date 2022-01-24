@@ -57,12 +57,16 @@ const (
 	DataFloat
 )
 
+// -------------------
+// ----- Globals -----
+// -------------------
+
 // sTyp defines strings for print friendly output of symType.
 var sTyp = []string{
 	"Function",
 	"Parameter",
-	"Local",
-	"Global",
+	"Local identifier",
+	"Global identifier",
 	"Block NODE",
 }
 
@@ -72,10 +76,6 @@ var dTyp = []string{
 	"float",
 	"bool",
 }
-
-// -------------------
-// ----- Globals -----
-// -------------------
 
 // Global symbol table.
 var Global SymTab
@@ -188,15 +188,22 @@ func GenerateSymTab(opt util.Options) error {
 			}
 		}
 		for _, v := range Global.HT {
-			st := util.Stack{}
-			st.Push(&Global) // Push global symbol table to bottom of stack.
 			if v.Typ == SymFunc {
-				st.Push(&v.Locals)           // Push function's local definitions to top of stack.
-				v.Node.Children[2].Entry = v // Link FUNCTION body BLOCK to symbol table entry of function.
-				for _, e1 := range v.Node.Children[2].Children {
-					// Iterate over all children of FUNCTION's BLOCK.
-					// It is already defined and put on stack.
-					if err := e1.bind(&st, v); err != nil {
+				st := util.Stack{}
+				st.Push(&Global)   // Push global symbol table to bottom of stack.
+				st.Push(&v.Locals) // Push function's local definitions to top of stack.
+				l := v.Node.Children[3]
+				if l.Typ == BLOCK {
+					for _, e1 := range l.Children {
+						// Iterate over all children of FUNCTION's BLOCK.
+						// It is already defined and put on stack.
+						if err := e1.bind(&st, v); err != nil {
+							return fmt.Errorf("error in body of function %q: %s", v.Name, err)
+						}
+					}
+				} else {
+					if err := l.bind(&st, v); err != nil {
+						// Single statement function body. Bind statement recursively.
 						return fmt.Errorf("error in body of function %q: %s", v.Name, err)
 					}
 				}
@@ -234,6 +241,8 @@ func (n *Node) bindGlobal(opt util.Options) error {
 			Locals:  SymTab{HT: make(map[string]*Symbol, len(n.Children[1].Children)+8)}, // Leave space for locals.
 		}
 
+		n.Entry = &s
+
 		// Set return data type.
 		if err := s.setDataType(n.Children[1]); err != nil {
 			return fmt.Errorf("compiler error: %s", err)
@@ -259,6 +268,9 @@ func (n *Node) bindGlobal(opt util.Options) error {
 					Seq:  seq,
 					Node: e2,
 				}
+
+				// Link parameter node to parameter symbol.
+				e2.Entry = &param
 
 				// Set return data type.
 				if err := param.setDataType(e1); err != nil {
@@ -313,6 +325,9 @@ func (n *Node) bindGlobal(opt util.Options) error {
 					dup.Name, dup.Node.Line, dup.Node.Pos)
 			}
 
+			// Link global node to global symbol.
+			e1.Entry = &s
+
 			// Add global variable to global symbol table.
 			Global.Add(&s)
 		}
@@ -359,6 +374,15 @@ func (n *Node) bind(st *util.Stack, f *Symbol) error {
 					Seq:  f.Nlocals,
 					Node: e2,
 				}
+
+				// Set datatype of symbol.
+				if err := s.setDataType(n); err != nil {
+					return fmt.Errorf("compiler error: %s", err)
+				}
+
+				// Link local node to local symbol.
+				e2.Entry = &s
+
 				f.Nlocals++
 				scope.Add(&s)
 			}
@@ -418,9 +442,9 @@ func (st *SymTab) String() string {
 // String returns a print friendly string of Symbol s.
 func (s *Symbol) String() string {
 	if s.Typ == SymFunc {
-		return fmt.Sprintf("%s [%q], params: %d, locals: %d", sTyp[s.Typ], s.Name, s.Nparams, s.Nlocals)
+		return fmt.Sprintf("%s [%q] (%s), params: %d, locals: %d", sTyp[s.Typ], s.Name, dTyp[s.DataTyp], s.Nparams, s.Nlocals)
 	} else {
-		return fmt.Sprintf("%s [%q]", sTyp[s.Typ], s.Name)
+		return fmt.Sprintf("%s [%q] (%s)", sTyp[s.Typ], s.Name, dTyp[s.DataTyp])
 	}
 }
 

@@ -12,7 +12,7 @@ compiler the project examines *functional level parallelism* and other features 
 code generation of the Go programming language.
 
 **If you are looking for how to use the compiler please see
-[USAGE.md](usage.md).**
+[USAGE.md](USAGE.md).**
 
 ## Very Simple Language
 
@@ -26,7 +26,7 @@ and [Lex](https://en.wikipedia.org/wiki/Lex_(software)).
 
 One of the additional features provided by this particular VSL compiler is the addition of data types. Two types
 exists: `int`; the Integer type and `float`; the decimal floating point type. Typings can't be statically inferred at
-compile time, so I have made some alterations to the existing VSL language. I introduced the keyword `int` and `float`,
+compile time, so I have made some alterations to the existing VSL language. I introduced the keywords `int` and `float`,
 added return data type on function declarations, added data type for variable declarations and added data type for
 parameter declarations.
 
@@ -39,9 +39,9 @@ begin
 end
 ```
 
-In my type extended VSl I proposed the following syntax, showcasing both *parameter*
-and function *return* type. The below example tells that parameter `n` is of type `int`, as is the return type. This is
-very similar to the Go language syntax.
+In my type extended VSL I proposed the following syntax, showcasing both *parameter*
+and function *return* type. In the below example parameters `n` and `estimate` are of type `int`, as is the return type.
+This is very similar to the Go language syntax.
 
 ```VSL
 def improve ( n, estimate int ) int
@@ -78,6 +78,8 @@ begin
 end
 ```
 
+More on VSl type compatibility and assignment in [types.md](types.md).
+
 ## Go features
 
 ### State function scanner
@@ -87,7 +89,7 @@ The scanner of this compiler was heavily inspired by Rob Pike's
 available [here](https://talks.golang.org/2011/lex.slide#1).
 
 In the video Rob Pike suggests that regular expressions are overkill for simple language scanners. He proposes the state
-function model where a scanner check for lexemes by moving through the source stream, character by character, and acting
+function model where a scanner searches for lexemes by moving through the source stream, character by character, and acting
 based on its internal state.
 
 ### Function level parallelism

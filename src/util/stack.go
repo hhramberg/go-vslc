@@ -100,7 +100,7 @@ func (s *Stack) Get(n int) interface{} {
 	}
 
 	e1 := s.bottom
-	for i1 := 0; i1 <= s.size - n; i1++ {
+	for i1 := 0; i1 < s.size - n; i1++ {
 		e1 = e1.next
 	}
 	return e1.E
