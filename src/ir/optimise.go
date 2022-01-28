@@ -191,9 +191,9 @@ func (n *Node) constantFolding() error {
 		// Check for two float expression.
 		if c0.Typ == FLOAT_DATA && c1.Typ == FLOAT_DATA {
 			// Both operands are floating point constants.
-			a := c0.Data.(float64)
-			b := c1.Data.(float64)
-			var res float64
+			a := c0.Data.(float32)
+			b := c1.Data.(float32)
+			var res float32
 			switch n.Data.(string) {
 			case "+":
 				res = a + b
@@ -221,9 +221,9 @@ func (n *Node) constantFolding() error {
 			// First operator is an integer constant.
 			switch c1.Typ {
 			case FLOAT_DATA:
-				a := float64(c0.Data.(int))
-				b := c1.Data.(float64)
-				var res float64
+				a := float32(c0.Data.(int))
+				b := c1.Data.(float32)
+				var res float32
 				// These optimisations will leave the result of the expression as float.
 				switch n.Data.(string) {
 				case "+":
@@ -282,9 +282,9 @@ func (n *Node) constantFolding() error {
 			// Replace multiply and division with left and right shift if possible.
 			switch c0.Typ {
 			case FLOAT_DATA:
-				a := c0.Data.(float64)
-				b := float64(c1.Data.(int))
-				var res float64
+				a := c0.Data.(float32)
+				b := float32(c1.Data.(int))
+				var res float32
 				switch n.Data.(string) {
 				case "+":
 					res = a + b

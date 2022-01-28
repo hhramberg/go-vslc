@@ -38,6 +38,32 @@ func (w *Writer) Write(format string, args ...interface{}) {
 	w.sb.WriteString(fmt.Sprintf(format, args...))
 }
 
+// Ins1 writes a one-line instruction using the operator and single operand.
+func (w *Writer) Ins1(op, rs1 string) {
+	w.sb.WriteString(fmt.Sprintf("\t%s\t%s\n", op, rs1))
+}
+
+// Ins2 writes a one-line instruction using the operator, destination register and single source register.
+func (w *Writer) Ins2(op, rd, rs1 string) {
+	w.sb.WriteString(fmt.Sprintf("\t%s\t%s, %s\n", op, rd, rs1))
+}
+
+// Ins2imm writes a one-line instruction using the operator, destination register, single source register and
+// signed immediate.
+func (w *Writer) Ins2imm(op, rd, rs1 string, imm int) {
+	w.sb.WriteString(fmt.Sprintf("\t%s\t%s, %s, %d\n", op, rd, rs1, imm))
+}
+
+// Ins3 writes a one-line instruction using the operator, destination register and two source registers.
+func (w *Writer) Ins3(op, rd, rs1, rs2 string) {
+	w.sb.WriteString(fmt.Sprintf("\t%s\t%s, %s, %s\n", op, rd, rs1, rs2))
+}
+
+// Label writes a one-line label with the given name.
+func (w *Writer) Label(name string) {
+	w.sb.WriteString(fmt.Sprintf("\n%s:\n", name))
+}
+
 // Flush empties the Writer's buffer and sends the buffer data to the
 // designated output writer over the Writer's channel.
 func (w *Writer) Flush() {
@@ -47,8 +73,17 @@ func (w *Writer) Flush() {
 
 // Close flushes the Writer's buffer and then closes the Writer's channel.
 func (w *Writer) Close() {
-	defer close(w.c)
 	w.Flush()
+	w.c = nil
+}
+
+// NewWriter returns a new Writer to be used by worker threads to write strings concurrently to the output buffer.
+// Must not be called before main thread has called ListenWrite.
+func NewWriter() Writer {
+	return Writer{
+		sb: strings.Builder{},
+		c:  wc,
+	}
 }
 
 // ReadSource reads source code from file or stdin.
@@ -104,7 +139,7 @@ func ListenWrite(t int, f *os.File) {
 	}
 
 	// Listen for input and termination signal.
-	go func(wc chan string, cc chan error){
+	go func(wc chan string, cc chan error) {
 		defer close(wc)
 		defer close(cc)
 		for {

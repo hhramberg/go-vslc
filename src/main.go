@@ -86,12 +86,19 @@ func main() {
 		util.ListenWrite(opt.Threads, nil)
 	}
 
+	// Start thread safe label generator.
+	go util.ListenLabel()
+
 	// Generate assembler.
 	if err := backend.GenerateAssembler(opt); err != nil {
 		fmt.Printf("Code generation error: %s\n", err)
 		util.Close()
+		util.CloseLabel()
 		os.Exit(1)
 	}
+
+	// Stop thread safe label generator.
+	util.CloseLabel()
 
 	// Stop the output writer.
 	util.Close()

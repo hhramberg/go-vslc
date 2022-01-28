@@ -68,7 +68,7 @@ func nodeInit(typ ir.NodeType, data interface{}, line, pos int, args ...yySymTyp
 		}
 	case ir.FLOAT_DATA:
 		if num, err := parseFloat(data); err == nil {
-			n.Data = num
+			n.Data = float32(num)
 		} else {
 			fmt.Println(err)
 			n.Data = data.(string)
@@ -82,18 +82,19 @@ func nodeInit(typ ir.NodeType, data interface{}, line, pos int, args ...yySymTyp
 	return yySymType{typ: int(typ), val: "N/A", node: &n}
 }
 
-// parseInteger parses an interface{} as an integer.
+// parseInteger parses an interface{} as an integer. This function returns a 32-bit integer value.
 func parseInteger(n interface{}) (int, error) {
 	if s, ok := n.(string); ok {
-		return strconv.Atoi(s)
+		i, err := strconv.Atoi(s)
+		return int(int32(i)), err
 	}
 	return -1, fmt.Errorf("could not parse integer number from %v", n)
 }
 
-// parseFloat parses an interface{} as an integer.
+// parseFloat parses an interface{} as an integer. This function returns a 32-bit floating point value.
 func parseFloat(n interface{}) (float64, error) {
 	if s, ok := n.(string); ok {
-		return strconv.ParseFloat(s, 64)
+		return strconv.ParseFloat(s, 32)
 	}
-	return -1.0, fmt.Errorf("could not parse float form %v", n)
+	return -1.0, fmt.Errorf("could not parse float from %v", n)
 }

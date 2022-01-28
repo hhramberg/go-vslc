@@ -78,7 +78,7 @@ begin
 end
 ```
 
-More on VSl type compatibility and assignment in [types.md](types.md).
+More on VSL type compatibility and assignment in [types.md](types.md).
 
 ## Go features
 

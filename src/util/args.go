@@ -29,8 +29,8 @@ const maxThreads = 64 // Maximum threads allowed executing in parallel.
 const appVersion = "vsl compiler 1.0"
 
 const (
-	aarch64 = iota
-	riscv
+	Aarch64 = iota
+	Riscv
 )
 
 // ---------------------
@@ -87,9 +87,9 @@ func ParseArgs() (Options, error) {
 			}
 			switch args[i1+1] {
 			case "aarch64":
-				opt.Target = aarch64
-			case "riscv5":
-				opt.Target = riscv
+				opt.Target = Aarch64
+			case "riscv":
+				opt.Target = Riscv
 			default:
 				return opt, fmt.Errorf("unexpected architecture identifier: %s", args[i1+1])
 			}
@@ -118,7 +118,7 @@ func printHelp() {
 	_, _ = fmt.Fprintln(w, "-o\tOutput file.")
 	_, _ = fmt.Fprintln(w, "-s\tPath to source VSL file.")
 	_, _ = fmt.Fprintln(w, "-t\tNumber of threads to run in parallel. Must be in range [1, %d].", maxThreads)
-	_, _ = fmt.Fprintln(w, "-target\tOutput architecture type. Can be either 'aarch64' or 'riscv'. Defaults to 'aarch64'.")
+	_, _ = fmt.Fprintln(w, "-target\tOutput architecture type. Can be either 'Aarch64' or 'Riscv'. Defaults to 'Aarch64'.")
 	_, _ = fmt.Fprintln(w, "-ts\tOutput the tokens of the source code and exit.")
 	_, _ = fmt.Fprintln(w, "-v, -version\tPrints application version and exits the application.")
 	_, _ = fmt.Fprintln(w, "--v, --version")

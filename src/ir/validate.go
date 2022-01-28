@@ -282,7 +282,7 @@ func (n *Node) validateExpr(st *util.Stack) (dataType, error) {
 							}
 						case IDENTIFIER_DATA:
 							var dt dataType
-							if e, err := getEntry(arg.Data.(string), st); err == nil {
+							if e, err := GetEntry(arg.Data.(string), st); err == nil {
 								dt = e.DataTyp
 							} else {
 								return 0, fmt.Errorf("reference to identifier %q not found at line %d:%d: %s",
@@ -325,7 +325,7 @@ func (n *Node) validateExpr(st *util.Stack) (dataType, error) {
 		// Set operand 1 type.
 		switch c0.Typ {
 		case IDENTIFIER_DATA:
-			if e, err := getEntry(c0.Data.(string), st); err != nil {
+			if e, err := GetEntry(c0.Data.(string), st); err != nil {
 				return 0, fmt.Errorf("identifier %q not declated at line %d:%d",
 					c0.Data.(string), c0.Line, c0.Pos)
 			} else {
@@ -345,7 +345,7 @@ func (n *Node) validateExpr(st *util.Stack) (dataType, error) {
 		// Set operand 2 type.
 		switch c1.Typ {
 		case IDENTIFIER_DATA:
-			if e, err := getEntry(c1.Data.(string), st); err != nil {
+			if e, err := GetEntry(c1.Data.(string), st); err != nil {
 				return 0, fmt.Errorf("identifier %q not declated at line %d:%d",
 					c1.Data.(string), c1.Line, c1.Pos)
 			} else {
@@ -431,7 +431,7 @@ func (n *Node) validateRel(st *util.Stack) error {
 			dt1 = dt
 		}
 	case IDENTIFIER_DATA:
-		if s, err := getEntry(c1.Data.(string), st); err == nil {
+		if s, err := GetEntry(c1.Data.(string), st); err == nil {
 			dt1 = s.DataTyp
 		} else {
 			return fmt.Errorf("identifier %q not declared, at line %d:%d",
@@ -450,7 +450,7 @@ func (n *Node) validateRel(st *util.Stack) error {
 			dt2 = dt
 		}
 	case IDENTIFIER_DATA:
-		if s, err := getEntry(c2.Data.(string), st); err == nil {
+		if s, err := GetEntry(c2.Data.(string), st); err == nil {
 			dt2 = s.DataTyp
 		} else {
 			return fmt.Errorf("identifier %q not declared, at line %d:%d",
@@ -488,7 +488,7 @@ func (n *Node) validateAssign(st *util.Stack) error {
 	c2 := n.Children[1]
 	var dt1, dt2 dataType
 
-	if s, err := getEntry(c1.Data.(string), st); err == nil {
+	if s, err := GetEntry(c1.Data.(string), st); err == nil {
 		dt1 = s.DataTyp
 	} else {
 		return fmt.Errorf("identifier %q not declared, at line %d:%d",
@@ -503,7 +503,7 @@ func (n *Node) validateAssign(st *util.Stack) error {
 			dt2 = dt
 		}
 	case IDENTIFIER_DATA:
-		if s, err := getEntry(c2.Data.(string), st); err == nil {
+		if s, err := GetEntry(c2.Data.(string), st); err == nil {
 			dt2 = s.DataTyp
 		} else {
 			return fmt.Errorf("identifier %q not declared, at line %d:%d",
@@ -522,8 +522,8 @@ func (n *Node) validateAssign(st *util.Stack) error {
 	return nil
 }
 
-// getEntry retrieves a Symbol entry from the scope stack st.
-func getEntry(name string, st *util.Stack) (*Symbol, error) {
+// GetEntry retrieves a Symbol entry from the scope stack St.
+func GetEntry(name string, st *util.Stack) (*Symbol, error) {
 	for i1 := 0; i1 < st.Size(); i1++ {
 		if s := st.Get(1 + i1).(*SymTab); s != nil {
 			if e, ok := s.Get(name); ok {

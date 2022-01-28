@@ -43,6 +43,7 @@ type SymTab struct {
 
 const hTabSize = 16 // It is unlikely that we need to store more than 16 global variables in this project.
 const sSize = 16    // It is unlikely that we need to store more than 16 strings in this project.
+const fSize = 16    // Same a sSize.
 
 const (
 	SymFunc symType = iota
@@ -82,8 +83,14 @@ var Global SymTab
 
 // Strings contains all strings defined in program being compiled.
 var Strings struct {
-	st []string   // Slice of strings defined in program.
+	St []string   // Slice of strings defined in program.
 	mx sync.Mutex // Mutex for synchronising worker threads during string insertion.
+}
+
+// Floats contains all floating point constants in program being compiled.
+var Floats struct {
+	Ft []float32  // Slice of float constants defined in program.
+	mx sync.Mutex // Mutex for synchronising worker threads.
 }
 
 // seqCtrl manages sequence numbers for parallel worker threads.
@@ -105,9 +112,14 @@ func GenerateSymTab(opt util.Options) error {
 		mx: sync.Mutex{},
 	}
 	Strings = struct {
-		st []string
+		St []string
 		mx sync.Mutex
-	}{st: make([]string, sSize), mx: sync.Mutex{}}
+	}{St: make([]string, 0, sSize), mx: sync.Mutex{}}
+
+	Floats = struct {
+		Ft []float32
+		mx sync.Mutex
+	}{Ft: make([]float32, 0, fSize), mx: sync.Mutex{}}
 
 	if opt.Threads > 1 {
 		// Parallel.
@@ -400,6 +412,10 @@ func (n *Node) bind(st *util.Stack, f *Symbol) error {
 		// Take string data from node and put it in global string table.
 		// Replace STRING_DATA node's data with the index of string in string table.
 		AddString(n)
+	case FLOAT_DATA:
+		// Take the float data from node and put it in global float table.
+		// Replace node's data with the index of the float in the float table.
+		AddFloat(n)
 	}
 
 	// Recursively bind identifiers declared in children.
@@ -411,7 +427,7 @@ func (n *Node) bind(st *util.Stack, f *Symbol) error {
 	return nil
 }
 
-// Add safely adds a new Symbol to the symbol table st.
+// Add safely adds a new Symbol to the symbol table St.
 func (st *SymTab) Add(s *Symbol) {
 	st.mx.Lock()
 	defer st.mx.Unlock()
@@ -427,7 +443,7 @@ func (st *SymTab) Get(key string) (*Symbol, bool) {
 	return s, ok
 }
 
-// String returns a print friendly string of SymTab st.
+// String returns a print friendly string of SymTab St.
 func (st *SymTab) String() string {
 	sb := strings.Builder{}
 	st.mx.Lock()
@@ -452,8 +468,16 @@ func (s *Symbol) String() string {
 func AddString(n *Node) {
 	Strings.mx.Lock()
 	defer Strings.mx.Unlock()
-	Strings.st = append(Strings.st, n.Data.(string))
-	n.Data = len(Strings.st) - 0
+	Strings.St = append(Strings.St, n.Data.(string))
+	n.Data = len(Strings.St) - 1
+}
+
+// AddFloat safely appends the input float to the global float table.
+func AddFloat(n *Node) {
+	Floats.mx.Lock()
+	defer Floats.mx.Unlock()
+	Floats.Ft = append(Floats.Ft, n.Data.(float32))
+	n.Data = len(Floats.Ft) - 1
 }
 
 // setDataType sets the data type of Symbol s based on the type identified by input Node n.

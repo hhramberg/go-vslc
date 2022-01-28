@@ -116,7 +116,7 @@ func (n *Node) String() string {
 			return fmt.Sprintf("%s [%q]", nt[n.Typ], n.Data)
 		} else {
 			// AFTER syntax table creation. Get string data from global string table.
-			return fmt.Sprintf("%s [%s]", nt[n.Typ], Strings.st[n.Data.(int)])
+			return fmt.Sprintf("%s [%s]", nt[n.Typ], Strings.St[n.Data.(int)])
 		}
 	case INTEGER_DATA:
 		return fmt.Sprintf("%s [%d]", nt[n.Typ], n.Data)
