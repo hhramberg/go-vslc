@@ -7,7 +7,7 @@ import (
 )
 
 // genFunction generates a function. An error is returned if something went wrong.
-func genFunction(n *ir.Node, wr *util.Writer, st *util.Stack, rf *registerFile) error {
+func genFunction(n *ir.Node, wr *util.Writer, st, ls *util.Stack, rf *registerFile) error {
 	name := n.Children[0].Data.(string)
 	//returnType := n.Children[1].Data.(string)
 	//params := n.Children[2].Children // slice of typed variable lists.
@@ -20,32 +20,30 @@ func genFunction(n *ir.Node, wr *util.Writer, st *util.Stack, rf *registerFile) 
 	if fun.Nparams > 8 {
 		np += fun.Nparams - 8
 	}
-	N := (np + fun.Nlocals) << 2 // Number of bytes of data elements required by function.
+	N := (np + fun.Nlocals) * wordSize // Number of bytes of data elements required by function.
 	if res := N % stackAlign; res != 0 {
 		N += res // Adjust stack alignment.
 	}
 
 	// Allocate stack.
 	wr.Label(name)
-	wr.Ins2imm("addi", regi[sp], regi[sp], -(N + 16))            // Grow stack downwards.
-	wr.Write("\tsw\t%s, %d(%s)\n", regi[ra], (N+16)-4, regi[sp]) // Store old sp to return address.
-	wr.Write("\tsw\t%s, %d(%s)\n", regi[fp], (N+16)-8, regi[sp]) // Store old sp to frame pointer.
-	wr.Ins2imm("addi", regi[fp], regi[sp], N+16)                 // Set fp to be frame pointer.
+	wr.Ins2imm("addi", regi[sp], regi[sp], -(N + (wordSize << 1)))        // Grow stack downwards.
+	wr.Write("\t%s\t%s, %d(%s)\n", store, regi[ra], N+wordSize, regi[sp]) // Store old sp to return address.
+	wr.Write("\t%s\t%s, %d(%s)\n", store, regi[fp], N, regi[sp])          // Store old sp to frame pointer.
+	wr.Ins2imm("addi", regi[fp], regi[sp], N+(wordSize<<1))               // Set fp to be frame pointer.
 
 	// Check for floating point
-
-	// From: https://riscv.org/wp-content/uploads/2015/01/riscv-calling.pdf
-	// The stack pointer sp points to the first argument not passed in a register.
+	
 
 	// Generate function body.
-	if err := genAsm(body, fun, wr, st, rf); err != nil {
+	if err := genAsm(body, fun, wr, st, ls, rf); err != nil {
 		return err
 	}
 
 	// Deallocate stack.
-	wr.Write("\tlw\t%s, %d(%s)\n", regi[ra], 12, regi[sp])
-	wr.Write("\tlw\t%s, %d(%s)\n", regi[fp], 8, regi[sp])
-	wr.Ins2imm("addi", regi[sp], regi[sp], N+16)
+	wr.Write("\t%s\t%s, %d(%s)\n", load, regi[ra], N+wordSize, regi[sp])
+	wr.Write("\t%s\t%s, %d(%s)\n", load, regi[fp], N, regi[sp])
+	wr.Ins2imm("addi", regi[sp], regi[sp], N+(wordSize<<1))
 	wr.Write("\tret\n")
 
 	return nil
@@ -57,77 +55,152 @@ func genFunctionCall(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, 
 	// At this point we know that this call is valid and parameters match, because it has been previously verified.
 	name := n.Children[0].Data.(string)
 	args := n.Children[1].Children[0].Children // Arguments.
-	fun, _ := ir.GetEntry(name, st)            // Symbol table entry of called function.
+	fun, _ := ir.GetEntry(name, st)            // Symbol table entry of function to call.
 
-	// Put arguments in registers and on stack.
-	// From: https://riscv.org/wp-content/uploads/2015/01/riscv-calling.pdf
-	// The stack pointer sp points to the first argument not passed in a register.
-	//pi := 0
-	//pf := 0
-	idx := 0
-	for _, e1 := range args {
-		switch e1.Typ {
-		case ir.IDENTIFIER_DATA:
-		case ir.FLOAT_DATA:
-		case ir.INTEGER_DATA:
-		case ir.EXPRESSION:
-		}
-		fmt.Println(e1.String())
-	}
-
+	wr.Write("# calling function %q\n", name)
 	// Save volatile register t0-t6 and ft0-ft11 to stack before calling function.
-	wr.Ins2imm("addi", regi[sp], regi[sp], -76) // Size of registers t0-t6 and ft0-ft11.
+	adj := 19 * wordSize
+	if adj%stackAlign != 0 {
+		// Align the stack adjustment to comply with 16-byte aligned stack.
+		adj += stackAlign - (adj % stackAlign)
+	}
+	wr.Ins2imm("addi", regi[sp], regi[sp], adj) // Size of registers t0-t6 and ft0-ft11.
 
 	// Save t0-t2 to stack.
-	idx = 0
+	idx := 0
 	for i1 := t0; i1 <= t2; i1++ {
-		wr.Ins2("sw", regi[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
+		wr.Ins2(store, regi[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
 		idx -= wordSize
 	}
 	// Save t3-t6 to stack.
 	for i1 := t3; i1 <= t6; i1++ {
-		wr.Ins2("sw", regi[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
+		wr.Ins2(store, regi[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
 		idx -= wordSize
 	}
 	// Save ft0-ft7 to stack.
 	for i1 := ft0; i1 <= ft7; i1++ {
-		wr.Ins2("fsw", regf[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
+		wr.Ins2(fmt.Sprintf("f%s", store), regf[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
 		idx -= wordSize
 	}
 	// Save ft8-ft11 to stack.
 	for i1 := ft8; i1 <= ft11; i1++ {
-		wr.Ins2("fsw", regf[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
+		wr.Ins2(fmt.Sprintf("f%s", store), regf[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
 		idx -= wordSize
+	}
+
+	// Put arguments on stack.
+	if fun.Nparams > argsReg {
+		// Make room in stack for arguments.
+		m := fun.Nparams % argsReg
+		adj := m * wordSize
+		res := (m * wordSize) % stackAlign
+		if res != 0 {
+			adj += res
+		}
+		wr.Ins2imm("addi", regi[sp], regi[sp], -adj)
+	}
+
+	for i1, e1 := range args {
+		if i1 < argsReg {
+			// Put argument in register.
+			switch e1.Typ {
+			case ir.INTEGER_DATA:
+				wr.Write("\tli\t%s, %d\n", regi[a0+i1], e1.Data.(int))
+			case ir.FLOAT_DATA:
+				wr.Write("\tlui\t%s, %%hi(%s)\n", regf[fa0+i1], ir.Floats.Ft[e1.Data.(int)])
+				wr.Write("\tf%s\t%s, %%lo(%s)(%s)\n", load, regf[fa0+i1], ir.Floats.Ft[e1.Data.(int)], regf[fa0+i1])
+			case ir.IDENTIFIER_DATA:
+				// TODO: Could edit loadIdentifierToReg to specify destination register on call.
+				reg := rf.loadIdentifierToReg(e1.Data.(string), f, wr, st)
+				if reg.typ == integer {
+					wr.Ins2("mv", regi[a0+i1], reg.String())
+				} else {
+					wr.Ins2("mv", regf[fa0+i1], reg.String())
+				}
+			case ir.EXPRESSION:
+				if reg, err := genExpression(e1, f, wr, st, rf); err != nil {
+					return nil, err
+				} else {
+					if reg.typ == integer {
+						wr.Ins2("mv", regi[a0+i1], reg.String())
+					} else {
+						wr.Ins2("mv", regf[fa0+i1], reg.String())
+					}
+				}
+			}
+		} else {
+			// Put argument on stack.
+			idx = (i1 + 1 - argsReg) * wordSize
+			switch e1.Typ {
+			case ir.INTEGER_DATA:
+				reg := rf.lruI()
+				wr.Write("\tli\t%s, %d\n", reg.String(), e1.Data.(int))
+				wr.Write("\t%s\t%s, %d(%s)\n", store, reg.String(), idx, regi[sp])
+			case ir.FLOAT_DATA:
+				reg := rf.lruF()
+				wr.Write("\tlui\t%s, %%hi(%s)\n", reg.String(), ir.Floats.Ft[e1.Data.(int)])
+				wr.Write("\tf%s\t%s, %%lo(%s)(%s)\n", store, reg.String(), ir.Floats.Ft[e1.Data.(int)], regf[fa0+i1])
+				wr.Write("\tf%s\t%s, %d(%s)\n", store, reg.String(), idx, regi[sp])
+			case ir.IDENTIFIER_DATA:
+				reg := rf.loadIdentifierToReg(e1.Data.(string), f, wr, st)
+				if reg.typ == integer {
+					wr.Write("\t%s\t%s, %d(%s)\n", store, reg.String(), idx, regi[sp])
+				} else {
+					wr.Write("\tf%s\t%s, %d(%s)\n", store, reg.String(), idx, regi[sp])
+				}
+			case ir.EXPRESSION:
+				if reg, err := genExpression(e1, f, wr, st, rf); err != nil {
+					return nil, err
+				} else {
+					if reg.typ == integer {
+						wr.Write("\t%s\t%s, %d(%s)\n", store, reg.String(), idx, regi[sp])
+					} else {
+						wr.Write("\tf%s\t%s, %d(%s)\n", store, reg.String(), idx, regi[sp])
+					}
+				}
+			}
+		}
 	}
 
 	// Jump and link.
 	wr.Ins1("call", name)
 
+	// Deallocate stack for arguments.
+	if fun.Nparams > argsReg {
+		m := fun.Nparams % argsReg
+		adj := m * wordSize
+		res := (m * wordSize) % stackAlign
+		if res != 0 {
+			adj += res
+		}
+		wr.Ins2imm("addi", regi[sp], regi[sp], adj)
+	}
+
 	// Restore saved  temporary registers.
 	// Load t0-t2 from stack.
 	idx = 0
 	for i1 := t0; i1 <= t2; i1++ {
-		wr.Ins2("lw", regi[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
+		wr.Ins2(load, regi[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
 		idx -= wordSize
 	}
 	// Load t3-t6 from stack.
 	for i1 := t3; i1 <= t6; i1++ {
-		wr.Ins2("lw", regi[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
+		wr.Ins2(load, regi[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
 		idx -= wordSize
 	}
 	// Load ft0-ft7 from stack.
 	for i1 := ft0; i1 <= ft7; i1++ {
-		wr.Ins2("flw", regf[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
+		wr.Ins2(fmt.Sprintf("f%s", load), regf[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
 		idx -= wordSize
 	}
 	// Load ft8-ft11 from stack.
 	for i1 := ft8; i1 <= ft11; i1++ {
-		wr.Ins2("flw", regf[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
+		wr.Ins2(fmt.Sprintf("f%s", load), regf[i1], fmt.Sprintf("%d(%s)", idx, regi[sp]))
 		idx -= wordSize
 	}
 
 	// Restore stack pointer.
-	wr.Ins2imm("addi", regi[sp], regi[sp], 76) // Size of registers t0-t6 and ft0-ft11.
+	wr.Ins2imm("addi", regi[sp], regi[sp], adj) // Size of registers t0-t6 and ft0-ft11.
 
 	// Return a0 or f0.
 	if fun.DataTyp == ir.DataInteger {

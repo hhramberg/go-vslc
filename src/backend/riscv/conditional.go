@@ -3,6 +3,7 @@
 package riscv
 
 import (
+	"errors"
 	"fmt"
 	"vslc/src/ir"
 	"vslc/src/util"
@@ -31,7 +32,7 @@ func genIf(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *re
 	var err error
 
 	// Move operands into registers.
-	if rs1, rs2, err = genRel(rel, f, wr, st, ls, rf); err != nil {
+	if rs1, rs2, err = genRel(rel, f, wr, st, rf); err != nil {
 		return err
 	}
 
@@ -40,7 +41,7 @@ func genIf(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *re
 		lifend := util.NewLabel(util.LabelIfEnd) // The end of the IF-THEN statement.
 
 		// Generate compare and jump.
-		if err = genJump(n, rs1, rs2, wr, lifend); err != nil {
+		if err = genJump(rel, rs1, rs2, wr, lifend); err != nil {
 			return err
 		}
 
@@ -58,7 +59,7 @@ func genIf(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *re
 		c2 := n.Children[2]
 
 		// Generate compare and jump.
-		if err = genJump(n, rs1, rs2, wr, lels); err != nil {
+		if err = genJump(rel, rs1, rs2, wr, lels); err != nil {
 			return err
 		}
 
@@ -93,14 +94,14 @@ func genWhile(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf 
 	head := util.NewLabel(util.LabelWhileHead)
 	end := util.NewLabel(util.LabelWhileEnd)
 
-	// Append end label to label stack.
-	ls.Push(end)
+	// Append head label to label stack for continue statements.
+	ls.Push(head)
 
 	// Loop label.
 	wr.Label(head)
 
 	// Generate compare and jump.
-	if rs1, rs2, err = genRel(c1, f, wr, st, ls, rf); err != nil {
+	if rs1, rs2, err = genRel(c1, f, wr, st, rf); err != nil {
 		return err
 	}
 
@@ -114,27 +115,27 @@ func genWhile(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf 
 	}
 
 	// Unconditional jump to loop head.
-	wr.Write("\tjal\t%s,%s\n", regi[zero], head)
+	wr.Write("\tjal\t%s, %s\n", regi[zero], head)
 
 	// Break label.
 	wr.Label(end)
+	ls.Pop()
 	return nil
 }
 
-// genBreak generates a break statement that jumps to the top of the label stack.
-// An error is returned if something went wrong.
-func genBreak(n *ir.Node, wr *util.Writer, ls *util.Stack) error {
-	l := ls.Pop()
-	if l == nil {
-		return fmt.Errorf("line %d:%d: label stack is empty, cannot generate break statement", n.Line, n.Pos)
+// genContinue generates a continue statement. An error is returned if something went wrong.
+func genContinue(wr *util.Writer, ls *util.Stack) error {
+	if l := ls.Peek(); l != nil {
+		wr.Write("\tjal\t%s, %s\n", regi[zero], l.(string))
+	} else {
+		return errors.New("label stack is empty")
 	}
-	wr.Write("\tjal\t%s, %s\n", regi[zero], l.(string))
 	return nil
 }
 
 // genRel generates a relation by moving both operands to some registers.
 // An error is returned if something went wrong.
-func genRel(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *registerFile) (rs1, rs2 *register, err error) {
+func genRel(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *registerFile) (rs1, rs2 *register, err error) {
 	c1 := n.Children[0]
 	c2 := n.Children[1]
 	var op1, op2 string
@@ -142,22 +143,19 @@ func genRel(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *r
 	// Move operand 1.
 	switch c1.Typ {
 	case ir.IDENTIFIER_DATA:
-		reg := rf.loadIdentifierToReg(c1.Data.(string), f, wr, st)
-		op1 = regf[reg.id]
+		rs1 = rf.loadIdentifierToReg(c1.Data.(string), f, wr, st)
+		op1 = rs1.String()
 	case ir.FLOAT_DATA:
 		// Move constant float to register.
-		reg := rf.lruF()
-		wr.Write("\tlui\t%s, %%hi(%s%d)\n", reg.String(), labelFloat, n.Data.(int))                    // Move high 20 bits.
-		wr.Write("\taddi\t%s, %s, %%lo(%s%d)\n", reg.String(), reg.String(), labelFloat, n.Data.(int)) // Append low 12 bits.
-		op1 = reg.String()
+		rs1 = rf.lruF()
+		wr.Write("\tlui\t%s, %%hi(%s%d)\n", rs1.String(), labelFloat, n.Data.(int))                    // Move high 20 bits.
+		wr.Write("\taddi\t%s, %s, %%lo(%s%d)\n", rs1.String(), rs1.String(), labelFloat, n.Data.(int)) // Append low 12 bits.
+		op1 = rs1.String()
 	case ir.INTEGER_DATA:
 		// Move integer constant to integer register.
-		reg := rf.lruI()
-		wr.Write("\tli\t%s, %d\n", reg.String(), c1.Data.(int))
-		// Move integer register to float register.
-		r := rf.lruF()
-		wr.Write("\tfcvt.s.w\t%s, %s\n", r.String(), reg.String()) // Convert int to float and move to float register.
-		op1 = reg.String()
+		rs1 = rf.lruI()
+		wr.Write("\tli\t%s, %d\n", rs1.String(), c1.Data.(int))
+		op1 = rs1.String()
 	case ir.EXPRESSION:
 		if rs1, err = genExpression(c1, f, wr, st, rf); err != nil {
 			return nil, nil, err
@@ -167,8 +165,8 @@ func genRel(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *r
 				op1 = rs1.String()
 			} else {
 				// Result of expression is integer.
-				rs1 := rf.lruF()
-				op1 = rs1.String()
+				r := rf.lruF()
+				op1 = r.String()
 				wr.Write("\tfcvt.s.w\t%s, %s\n", op1, rs1.String()) // Convert int to float and move to float register.
 			}
 		}
@@ -177,30 +175,28 @@ func genRel(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *r
 	// Move operand 2.
 	switch c2.Typ {
 	case ir.IDENTIFIER_DATA:
-		reg := rf.loadIdentifierToReg(c2.Data.(string), f, wr, st)
-		op2 = regf[reg.id]
+		rs2 = rf.loadIdentifierToReg(c2.Data.(string), f, wr, st)
+		op2 = rs2.String()
 	case ir.FLOAT_DATA:
 		// Move constant float to register.
-		reg := rf.lruF()
-		wr.Write("\tlui\t%s, %%hi(%s%d)\n", reg.String(), labelFloat, n.Data.(int))                    // Move high 20 bits.
-		wr.Write("\taddi\t%s, %s, %%lo(%s%d)\n", reg.String(), reg.String(), labelFloat, n.Data.(int)) // Append low 12 bits.
-		op2 = reg.String()
+		rs2 = rf.lruF()
+		wr.Write("\tlui\t%s, %%hi(%s%d)\n", rs2.String(), labelFloat, n.Data.(int))                    // Move high 20 bits.
+		wr.Write("\taddi\t%s, %s, %%lo(%s%d)\n", rs2.String(), rs2.String(), labelFloat, n.Data.(int)) // Append low 12 bits.
+		op2 = rs2.String()
 	case ir.INTEGER_DATA:
 		// Move integer constant to integer register.
-		reg := rf.lruI()
-		wr.Write("\tli\t%s, %d\n", reg.String(), c2.Data.(int))
+		rs2 = rf.lruI()
+		wr.Write("\tli\t%s, %d\n", rs2.String(), c2.Data.(int))
 		// Move integer register to float register.
-		r := rf.lruF()
-		wr.Write("\tfcvt.s.w\t%s, %s\n", r.String(), reg.String()) // Convert int to float and move to float register.
-		op2 = reg.String()
+		op2 = rs2.String()
 	case ir.EXPRESSION:
 		if rs2, err = genExpression(c2, f, wr, st, rf); err != nil {
 			return nil, nil, err
 		} else {
 			if rs2.typ == float {
 				// Result of expression is float.
-				rs1 := rf.lruF()
-				op2 = rs1.String()
+				r := rf.lruF()
+				op2 = r.String()
 				wr.Write("\tfcvt.s.w\t%s, %s\n", op2, rs2.String()) // Convert int to float and move to float register.
 			} else {
 				// Result of expression is integer.

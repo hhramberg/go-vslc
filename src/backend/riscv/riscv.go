@@ -36,8 +36,8 @@ type registerFile struct {
 // ----- Constants -----
 // ---------------------
 
-const labelFloat = ".CFP32_" // Constant prefix of constant floats in data segment.
-const labelString = ".STR_"  // Constant prefix of strings in data segment.
+const labelFloat = "CFP32_" // Constant prefix of constant floats in data segment.
+const labelString = "STR_"  // Constant prefix of strings in data segment.
 
 // Base registers (integer).
 const (
@@ -180,6 +180,9 @@ const (
 	t0 = x5
 	t1 = x6
 	t2 = x7
+)
+
+const (
 	t3 = iota + x28
 	t4
 	t5
@@ -211,16 +214,36 @@ const (
 	float   = int(ir.DataFloat)
 )
 
-// 12-bit immediate cannot exceed these values.
+// System call numbers, from: https://github.com/westerndigitalcorporation/RISC-V-Linux/blob/master/riscv-pk/pk/syscall.h
+const sysExit = 93  // For properly exiting application.
+const sysWrite = 64 // For writing to file descriptor.
+
+// stdout defines the Unix file descriptor for standard out.
+const stdout = 1
+
+// maxImm defines the maximum 12-bit immediate.
 const maxImm = 2047
+
+// minImm defines the minimum 12-bit immediate.
 const minImm = -2048
 
-const stackAlign = 16 // The stack must be aligned by 16 bytes.
-const wordSize = 4    // This is a 32-bit implementation only, word size is 4 bytes.
+const stackAlign = 16 // stackAlign defines the size of any increment of the stack.
+const word64 = 8      // word64 defines the length of a 64-bit architecture word.
+const word32 = 4      // word32 defines the length of a 32-bit architecture word.
+const argsReg = 8     // argsReg defines the umber of arguments put directly in registers.
 
 // -------------------
 // ----- Globals -----
 // -------------------
+
+// wordSize defines the length of a machine word in bytes for the current architecture.
+var wordSize = word64 // 64-bit by default.
+
+// load defines the instruction for loading a machine word for the current architecture.
+var load = "ld" // 64-bit by default.
+
+// store defines the instruction for storing a machine word for the current architecture.
+var store = "sd" // 64-bit by default.
 
 // regi is the short form for registers integers and contains string literals for base integer registers.
 var regi = [...]string{
@@ -302,32 +325,24 @@ var regf = [...]string{
 func GenRiscv(opt util.Options) error {
 	// Create and initialise register file representation.
 	regFile := registerFile{
-		i: make([]register, 32),
-		f: make([]register, 32),
+		i:   make([]register, 32),
+		f:   make([]register, 32),
+		iht: make(map[string]int),
+		fht: make(map[string]int),
 	}
-	for i1, e1 := range regFile.i {
-		e1.typ = integer
-		e1.id = i1
+	for i1 := range regFile.i {
+		regFile.i[i1].typ = integer
+		regFile.i[i1].id = i1
 		regFile.f[i1].typ = float
 		regFile.f[i1].id = i1
 	}
 
-	// Global data and constants.
-
-	// Write strings and float constants to data segment.
-	wr := util.NewWriter()
-	wr.Write(".data\n# Strings.\n")
-	for i1, e1 := range ir.Strings.St {
-		wr.Write("%s%d:\n\t.asciz\t%q\n", labelString, i1, e1)
+	// If configured for 32-bit: set word-size and load and store instructions.
+	if opt.Target == util.Riscv32 {
+		wordSize = word32
+		load = "lw"
+		store = "sw"
 	}
-	wr.Write("\n# Floating point constants.\n")
-	for i1, e1 := range ir.Floats.Ft {
-		wr.Write("%s%d:\n\t.word\t%x\n", labelFloat, i1, math.Float32bits(e1))
-	}
-	// TODO: generate global variables.
-
-	wr.Flush()
-	wr.Close()
 
 	// Generate functions.
 	if opt.Threads > 1 {
@@ -373,10 +388,11 @@ func GenRiscv(opt util.Options) error {
 						w := util.NewWriter()                   // Create output handler.
 						rf := regFile                           // Copy register file.
 						f := ir.Root.Children[0].Children[i+i2] // Function to generate.
-						st := util.Stack{}
+						st := util.Stack{}                      // Stack for definition scopes.
+						ls := util.Stack{}                      // Label stack for break/continue.
 						st.Push(&ir.Global)
 						st.Push(&(f.Entry.Locals))
-						if err := genFunction(f, &w, &st, &rf); err != nil {
+						if err := genFunction(f, &w, &st, &ls, &rf); err != nil {
 							errs.mx.Lock()
 							errs.err = append(errs.err, err)
 							errs.mx.Unlock()
@@ -403,14 +419,15 @@ func GenRiscv(opt util.Options) error {
 		}
 	} else {
 		// Sequential.
-		st := util.Stack{}    // Stack used for identifier lookup.
+		st := util.Stack{}    // Stack for definition scopes.
+		ls := util.Stack{}    // Label stack for continue statements.
 		st.Push(&ir.Global)   // Push global symbol table on stack.
 		w := util.NewWriter() // Create output handler.
 		rf := regFile         // Copy register file.
 		for _, e1 := range ir.Root.Children[0].Children {
 			if e1.Typ == ir.FUNCTION {
 				st.Push(&(e1.Entry.Locals))
-				if err := genFunction(e1, &w, &st, &rf); err != nil {
+				if err := genFunction(e1, &w, &st, &ls, &rf); err != nil {
 					return err
 				}
 				st.Pop()
@@ -423,6 +440,32 @@ func GenRiscv(opt util.Options) error {
 		// Close writer.
 		w.Close()
 	}
+	// Global data and constants go below .text section.
+
+	// Write strings and float constants to data segment.
+	wr := util.NewWriter()
+	wr.Write(".data\n# Strings.\n")
+	for i1, e1 := range ir.Strings.St {
+		wr.Write("%s%d:\n\t.asciz\t%q\n", labelString, i1, e1)
+	}
+	wr.Write("\n# Floating point constants.\n")
+	for i1, e1 := range ir.Floats.Ft {
+		wr.Write("%s%d:\n\t.word\t%x\n", labelFloat, i1, math.Float32bits(e1))
+	}
+
+	// Write global variables to data segment.
+	// TODO: This is currently for 64-bit variables. Consult Michael for 32/64-bit operation.
+	wr.Write("# Global variables.\n")
+	for _, v := range ir.Global.HT {
+		if v.Typ == ir.SymGlobal {
+			// VSL doesn't support assignment at declaration. All variables are initially 0.
+			wr.Write("%s:\n\t.8byte\t%x\n", v.Name, 0)
+		}
+	}
+
+	wr.Flush()
+	wr.Close()
+
 	return nil
 }
 
@@ -436,79 +479,130 @@ func (r *register) String() string {
 
 // loadIdentifierToReg loads identifier with name s to a register. The register type and index is returned.
 func (rf *registerFile) loadIdentifierToReg(name string, f *ir.Symbol, wr *util.Writer, st *util.Stack) *register {
-	// TODO: implement load instructions.
 	s, _ := ir.GetEntry(name, st) // Safe, exceptions are caught in intermediate validate stage.
 
+	wr.Write("# Loading identifier %q\n", s.Name) // TODO: delete.
 	if s.DataTyp == ir.DataInteger {
-		// Check if identifier is in register file already.
-		if idx, exist := rf.iht[name]; exist {
-			rf.i[idx].seq = rf.seq
-			rf.seq++
-			return &(rf.i[idx])
-		}
-
-		// Not in register file, load from memory.
-
-		// Allocate register.
 		reg := rf.lruI()
-
 		switch s.Typ {
-		case ir.SymLocal:
 		case ir.SymParam:
-			if s.Seq < 8 {
-				// Load from argument register. Just reference the parameter register itself.
-				return &(rf.i[s0+s.Seq])
+			if s.Seq < argsReg {
+				// Get from current stack.
+				idx := wordSize << 1 // ra and p are stored on top of the stack.
+				idx += (s.Seq + 1) * wordSize
+				wr.Write("\t%s\t%s, -%d(%s)\n", load, reg.String(), idx, regi[fp])
+			} else {
+				// Get from previous stack.
+				idx := (s.Seq - argsReg) * wordSize
+				wr.Write("\t%s\t%s, %d(%s)\n", load, reg.String(), idx, regi[fp])
 			}
-			// Load from stack.
-			wr.Write("\tlw\t%s, %s\n", reg.String()) // TODO: fiks!
+		case ir.SymLocal:
+			idx := wordSize << 1 // ra and p are stored on top of the stack.
+			idx += (s.Seq + 1) * wordSize
+			if s.Nparams > argsReg {
+				idx += argsReg * wordSize
+			} else {
+				idx += s.Nparams * wordSize
+			}
+			wr.Write("\t%s\t%s, -%d(%s)\n", load, reg.String(), idx, regi[fp])
 		case ir.SymGlobal:
+			wr.Write("\tlui\t%s, %%hi(%s)\n", reg.String(), s.Name)
+			wr.Write("\t%s\t%s, %%lo(%s)(%s)\n", load, reg.String(), s.Name, reg.String())
 		}
-
-		// Update integers.
-		reg.entry = s
-		reg.use = true
-		reg.seq = rf.seq
-		rf.iht[name] = reg.id
-		rf.seq++
 		return reg
 	} else {
-		// Check if identifier is in register file already.
-		if idx, exist := rf.fht[name]; exist {
-			rf.f[idx].seq = rf.seq
-			rf.seq++
-			return &(rf.i[idx])
-		}
-
-		// Not in register file, load from memory.
-
-		// Allocate register.
 		reg := rf.lruF()
-
-		// Update floats.
-		reg.entry = s
-		reg.use = true
-		reg.seq = rf.seq
-		rf.fht[name] = reg.id
-		rf.seq++
+		switch s.Typ {
+		case ir.SymParam:
+			if s.Seq < argsReg {
+				// Get from current stack.
+				idx := wordSize << 1 // ra and p are stored on top of the stack.
+				idx += (s.Seq + 1) * wordSize
+				wr.Write("\tf%s\t%s, -%d(%s)\n", load, reg.String(), idx, regi[fp])
+			} else {
+				// Get from previous stack.
+				idx := (s.Seq - argsReg) * wordSize
+				wr.Write("\tf%s\t%s, %d(%s)\n", load, reg.String(), idx, regi[fp])
+			}
+		case ir.SymLocal:
+			idx := wordSize << 1 // ra and p are stored on top of the stack.
+			idx += (s.Seq + 1) * wordSize
+			if s.Nparams > argsReg {
+				idx += argsReg * wordSize
+			} else {
+				idx += s.Nparams * wordSize
+			}
+			wr.Write("\tf%s\t%s, -%d(%s)\n", load, reg.String(), idx, regi[fp])
+		case ir.SymGlobal:
+			wr.Write("\tlui\t%s, %%hi(%s)\n", reg.String(), s.Name)
+			wr.Write("\tf%s\t%s, %%lo(%s)(%s)\n", load, reg.String(), s.Name, reg.String())
+		}
 		return reg
 	}
 }
 
-// saveRegToIdentifier takes the contents of the register src and saves it to the memory space allocated to
+// saveRegToIdentifier takes the contents of the register reg and saves it to the memory space allocated to
 // identifier with the given name.
-func (rf *registerFile) saveRegToIdentifier(name string, src int, wr *util.Writer, st *util.Stack) {
-	// TODO: implement store instructions.
+func (reg *register) saveRegToIdentifier(name string, wr *util.Writer, st *util.Stack) {
 	s, _ := ir.GetEntry(name, st) // Safe, exceptions are caught in intermediate validate stage.
 
+	wr.Write("# Storing register to identifier %q\n", s.Name) // TODO: delete.
 	if s.DataTyp == ir.DataInteger {
-		wr.Ins2("sw", regi[src], "") // TODO: fix!
-		delete(rf.iht, name)
+		switch s.Typ {
+		case ir.SymParam:
+			if s.Seq < argsReg {
+				// Get from current stack.
+				idx := wordSize << 1 // ra and p are stored on top of the stack.
+				idx += (s.Seq + 1) * wordSize
+				wr.Write("\t%s\t%s, -%d(%s)\n", store, reg.String(), idx, regi[fp])
+			} else {
+				// Get from previous stack.
+				idx := (s.Seq - argsReg) * wordSize
+				wr.Write("\t%s\t%s, %d(%s)\n", store, reg.String(), idx, regi[fp])
+			}
+		case ir.SymLocal:
+			idx := wordSize << 1 // ra and p are stored on top of the stack.
+			idx += (s.Seq + 1) * wordSize
+			if s.Nparams > argsReg {
+				idx += argsReg * wordSize
+			} else {
+				idx += s.Nparams * wordSize
+			}
+			wr.Write("\t%s\t%s, -%d(%s)\n", store, reg.String(), idx, regi[fp])
+		case ir.SymGlobal:
+			wr.Write("\tlui\t%s, %%hi(%s)\n", reg.String(), s.Name)
+			wr.Write("\t%s\t%s, %%lo(%s)(%s)\n", store, reg.String(), s.Name, reg.String())
+		}
 	} else {
-		delete(rf.fht, name)
+		switch s.Typ {
+		case ir.SymParam:
+			if s.Seq < argsReg {
+				// Get from current stack.
+				idx := wordSize << 1 // ra and p are stored on top of the stack.
+				idx += (s.Seq + 1) * wordSize
+				wr.Write("\tf%s\t%s, -%d(%s)\n", store, reg.String(), idx, regi[fp])
+			} else {
+				// Get from previous stack.
+				idx := (s.Seq - argsReg) * wordSize
+				wr.Write("\tf%s\t%s, %d(%s)\n", store, reg.String(), idx, regi[fp])
+			}
+		case ir.SymLocal:
+			idx := wordSize << 1 // ra and p are stored on top of the stack.
+			idx += (s.Seq + 1) * wordSize
+			if s.Nparams > argsReg {
+				idx += argsReg * wordSize
+			} else {
+				idx += s.Nparams * wordSize
+			}
+			wr.Write("\tf%s\t%s, -%d(%s)\n", store, reg.String(), idx, regi[fp])
+		case ir.SymGlobal:
+			wr.Write("\tlui\t%s, %%hi(%s)\n", reg.String(), s.Name)
+			wr.Write("\tf%s\t%s, %%lo(%s)(%s)\n", store, reg.String(), s.Name, reg.String())
+		}
 	}
 }
 
-// lruF returns the least recently used floating point register of registerFile regf.
+// lruF returns the least recently used floating point register of registerFile rf.
 func (rf *registerFile) lruF() *register {
 	low := int((^uint(0)) >> 1) // Max integer.
 	idx := 0
@@ -527,7 +621,7 @@ func (rf *registerFile) lruF() *register {
 	return &(rf.f[idx])
 }
 
-// lruI returns the least recently used usable integer register of registerFile regf.
+// lruI returns the least recently used usable integer register of registerFile rf.
 func (rf *registerFile) lruI() *register {
 	low := int((^uint(0)) >> 1) // Max integer.
 	idx := 0
@@ -563,5 +657,33 @@ func (rf *registerFile) useF(idx int, ident *ir.Symbol) {
 
 // genAsm generates assembly code recursively from the ir.Node n.
 func genAsm(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *registerFile) error {
+	switch n.Typ {
+	case ir.EXPRESSION:
+		if _, err := genExpression(n, f, wr, st, rf); err != nil {
+			return err
+		}
+	case ir.IF_STATEMENT:
+		if err := genIf(n, f, wr, st, ls, rf); err != nil {
+			return err
+		}
+	case ir.WHILE_STATEMENT:
+		if err := genWhile(n, f, wr, st, ls, rf); err != nil {
+			return err
+		}
+	case ir.NULL_STATEMENT:
+		if err := genContinue(wr, ls); err != nil {
+			return err
+		}
+	case ir.PRINT_STATEMENT:
+		if err := genPrint(n, f, wr, st, rf); err != nil {
+			return err
+		}
+	default:
+		for _, e1 := range n.Children {
+			if err := genAsm(e1, f, wr, st, ls, rf); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }

@@ -136,7 +136,7 @@ func genExpressionInt(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack,
 				// Move constant to register.
 				reg := rf.lruI()
 				wr.Write("\tlui\t%s, %%hi(%d)\n", reg.String(), i)
-				wr.Write("\taddi\t%s, %s, %%hi(%d)\n", reg.String(), reg.String(), i)
+				wr.Write("\taddi\t%s, %s, %%lo(%d)\n", reg.String(), reg.String(), i)
 				op2 = reg.String()
 			}
 		case ir.EXPRESSION:
@@ -165,7 +165,7 @@ func genExpressionInt(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack,
 				// Move constant to register.
 				reg := rf.lruI()
 				wr.Write("\tlui\t%s, %%hi(%d)\n", reg.String(), i)
-				wr.Write("\taddi\t%s, %s, %%hi(%d)\n", reg.String(), reg.String(), i)
+				wr.Write("\taddi\t%s, %s, %%lo(%d)\n", reg.String(), reg.String(), i)
 				op1 = reg.String()
 			}
 		case ir.EXPRESSION:

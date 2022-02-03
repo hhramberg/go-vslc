@@ -29,8 +29,10 @@ func GenerateAssembler(opt util.Options) error {
 	switch opt.Target {
 	case util.Aarch64:
 		return arm.GenArm(opt)
-	case util.Riscv:
+	case util.Riscv64:
 		return riscv.GenRiscv(opt)
+	case util.Riscv32:
+		return errors.New("RISC-V 32-bit not supported yet")
 	default:
 		return errors.New("unsupported output architecture")
 	}
