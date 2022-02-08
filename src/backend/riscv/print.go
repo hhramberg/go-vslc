@@ -4,7 +4,6 @@ package riscv
 
 import (
 	"fmt"
-	"math"
 	"vslc/src/ir"
 	"vslc/src/util"
 )
@@ -12,9 +11,6 @@ import (
 // genPrint generates a print statement recursively. A error is returned if something went wrong.
 func genPrint(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *registerFile) error {
 	wr.Write("# Print statement begin.\n") // TODO: delete.
-
-	fl := float32(12.34)
-	fmt.Println(floatToChars(fl))
 
 	for _, e1 := range n.Children[0].Children {
 		// For every item to be printed.
@@ -26,35 +22,201 @@ func genPrint(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *reg
 			wr.Ins2imm("addi", regi[a2], regi[zero], len(ir.Strings.St[e1.Data.(int)])) // Length of string to print.
 			wr.Ins2imm("addi", regi[a3], regi[zero], sysWrite)                          // System call for write. TODO: validate for 64/32-bit, may be different.
 			wr.Write("\tecall\n")                                                       // Call the system call write.
-		case ir.FLOAT_DATA:
-			// TODO: Continue.
-			// Hack the stack and save a0 to stack without changing the sp.
-			wr.Write("\tfsw\t%s, %d(%s)\n", regi[fa0], -4, regi[sp])
-
-			wr.Write("\tflw\t%s, %s%d\n", regi[fa0], labelFloat, e1.Data.(int)) // Move constant to register.
-
-			// Restore stack.
-			wr.Write("\tflw\t%s, %d(%s)\n", regi[fa0], -4, regi[sp])
-		case ir.INTEGER_DATA:
-			// Hack the stack and save a0 to stack without changing the sp.
-			wr.Write("\tsw\t%s, %d(%s)\n", regi[t0], -4, regi[sp])
-
-			wr.Write("\tmv\t%s, %d\n", regi[t0], e1.Data.(int)) // Move constant to register.
-			wr.Write("\tmv\t%s, %d\n", regi[a0], stdout)        // Print to stdout.
-
-			// Restore stack.
-			wr.Write("\tlw\t%s, %d(%s)\n", regi[t0], -4, regi[sp])
-		case ir.EXPRESSION:
-			if r, err := genExpression(n, f, wr, st, rf); err != nil {
-				return err
+		case ir.INTEGER_DATA, ir.FLOAT_DATA:
+			wr.Write("# Print constant.\n") // TODO: delete.
+			var chars string
+			if e1.Typ == ir.INTEGER_DATA {
+				chars = intToChars(e1.Data.(int))
 			} else {
-				if r.typ == integer {
-					// Integer.
-				} else {
-					// Floating point.
-				}
+				chars = floatToChars(ir.Floats.Ft[e1.Data.(int)])
 			}
-		case ir.IDENTIFIER_DATA:
+
+			// Calculate character buffer and stack alignment.
+			sa := len(chars)
+			if sa%stackAlign != 0 {
+				// Align stack.
+				sa += stackAlign - sa%stackAlign
+			}
+
+			// Allocate stack for character buffer.
+			wr.Ins2imm("addi", regi[sp], regi[sp], -sa)
+
+			// Store all characters in buffer.
+			for i2, e2 := range chars {
+				idx := sa + i2 - len(chars)
+				wr.Write("\tli\t%s, %d\n", regi[t0], e2)
+				wr.Write("\tsb\t%s, %d(%s)\n", regi[t0], idx, regi[sp])
+			}
+
+			// Set up write system call.
+			buf := sa - len(chars)
+			wr.Write("\tli\t%s, %d\n", regi[a7], sysWrite)            // Syscall write.
+			wr.Write("\tli\t%s, %d\n", regi[a0], stdout)              // Write to stdout.
+			wr.Write("\taddi\t%s, %s, %d\n", regi[a1], regi[sp], buf) // Address of first character.
+			wr.Write("\tli\t%s, %d\n", regi[a2], len(chars))          // Length of character stream.
+			wr.Write("\tecall\n")                                     // Call write.
+
+			// De-allocate stack for character buffer.
+			wr.Ins2imm("addi", regi[sp], regi[sp], sa)
+		case ir.EXPRESSION, ir.IDENTIFIER_DATA:
+			var r *register
+			var err error
+			if e1.Typ == ir.EXPRESSION {
+				if r, err = genExpression(n, f, wr, st, rf); err != nil {
+					return err
+				}
+			} else {
+				r = rf.loadIdentifierToReg(e1.Data.(string), f, wr, st)
+			}
+
+			if r.typ == integer {
+				// Integer.
+
+				// TODO: Optimise register usage. Registers are statically assigned for this print statement.
+
+				// STACK layout:
+				//
+				// BOTTOM
+				//
+				// buf [13:22]
+				// buf[4:13]
+				// 0x00, 0x00, 0x00, sign-byte, buf[0:4] - From 0 trough 3 (Go slice terminology).
+				// p (pointer to current position in buffer)
+				// i (the integer to print)
+				// a1 Preserved
+				// a0 Preserved
+				//
+				// TOP <--- SP
+
+				// The below procedure is effectively the intToChars function defined in this file
+				// compiled with GodBolt for RISC-V.
+
+				// Allocate stack space for buffer. Maximum character length is 21 with sign bit.
+				// Need space for character buffer (21), sign byte (1), end and current pointer, base and registers a0 and a1.
+				buf := 22 + (wordSize * 5)
+				if buf%stackAlign != 0 {
+					buf += stackAlign - buf%stackAlign
+				}
+
+				// Positions of variables, relative to sp.
+				begin := buf - 21 // Beginning of buffer on stack.
+				p := wordSize * 4 // Position on stack of variable p.
+				i := wordSize * 3 // Position on stack of number to stringify.
+				sign := buf - 22  // Position on stack of sign byte.
+				base := 10
+
+				// Allocate more stack space.
+				wr.Ins2imm("addi", regi[sp], regi[sp], -buf)
+
+				// Preserve a0 by saving it to stack top of stack.
+				wr.Write("\t%s\t%s, %d(%s)\n", store, regi[a0], wordSize, regi[sp])
+				// Preserve a1 by saving it to stack.
+				wr.Write("\t%s\t%s, %d(%s)\n", store, regi[a1], wordSize<<1, regi[sp])
+
+				wr.Write("\tli\t%s, %d\n", regi[a0], base) // Base = 10.
+
+				// Store integer to print on stack.
+				wr.Write("\t%s\t%s, %d(s%)\n", store, r.String(), i, regi[sp])
+
+				// Buffer[21] is at address[sp] + buf.
+
+				// Character pointer p, currently set to point to end of Buffer.
+				wr.Ins2imm("addi", regi[a0], regi[sp], p)
+				wr.Write("\t%s\t%s, %d(%s)\n", store, regi[a0], wordSize*4, regi[sp])
+
+				// Sign is byte is directly after the character buffer: address[Buffer[21]] + 1.
+				wr.Write("\tli\t%s, %d\n", regi[a0], 0)
+				wr.Write("\tsb\t%s, %d(%s)\n", regi[a0], sign, regi[sp])
+
+				// Check sign bit.
+				lsign := util.NewLabel(util.LabelIfEnd)
+				wr.LoadStore(load, regi[a0], i, regi[sp])
+				wr.Write("\tli\t%s, %d\n", regi[a1], 0) // Load 0 to a1 for comparison with integer in a0.
+				wr.Write("\tbge\t%s, %s, %s\n", regi[a0], regi[a1], lsign)
+				// IF-THEN: set sign byte true.
+				wr.Write("\tli\t%s, %d\n", regi[a0], 1)
+				wr.Write("\tsb\t%s, %d(%s)\n", regi[a0], begin-1, regi[sp])
+
+				// Set number positive.
+				wr.LoadStore(load, regi[a0], i, regi[sp])
+				wr.Write("\tli\t%s, %d\n", regi[a1], i, regi[sp])
+				wr.Ins3("mul", regi[a0], regi[a0], regi[a1])
+				wr.LoadStore(store, regi[a0], i, regi[sp])
+
+				// ELSE:
+				wr.Label(lsign)
+
+				// Iterate over i and create string.
+				lloophead := util.NewLabel(util.LabelWhileHead)
+
+				// *p = (i % base) + '0';
+
+				// First iteration of DO-WHILE, to catch i == 0.
+				wr.Label(lloophead)
+				wr.LoadStore(load, regi[a0], i, regi[sp])
+				wr.Write("\tli\t%s, %d\n", regi[a1], base)
+				wr.Ins3("rem", regi[a0], regi[a0], regi[a1]) // set a0 = i % base.
+				wr.Ins2imm("addi", regi[a0], regi[a0], '0')  // Add '0' to a0.
+				wr.LoadStore(load, regi[a1], p, regi[sp])    // Load the pointer p.
+				wr.LoadStore("sb", regi[a0], 0, regi[a1])    // Set *p = a0.
+
+				// p--;
+				//wr.LoadStore(load, regi[a0], p, regi[sp])
+				// p is already in a1.
+				wr.Ins2imm("addi", regi[a1], regi[a1], -1)
+				wr.LoadStore(store, regi[a1], p, regi[sp])
+
+				// i /= base;
+				wr.LoadStore(load, regi[a0], i, regi[sp])
+				wr.Write("\tli\t%s, %d\n", regi[s1], base)
+				wr.Ins3("div", regi[a0], regi[a0], regi[a1])
+				wr.LoadStore(store, regi[a0], i, regi[sp])
+
+				// Start loop.
+				// i is already in a0.
+				wr.Ins2imm("addi", regi[a1], regi[zero], 0)
+				wr.Write("\tbne\t%s, %s, %s\n", regi[a1], regi[a2], lloophead)
+
+				// Check for signbit.
+				lprint := util.NewLabel(util.LabelIfEnd)
+				wr.LoadStore("lb", regi[a0], sign, regi[sp])
+				wr.Write("\tli\t%s, %d\n", regi[a1], 0)
+				wr.Write("\tbeq\t%s, %s, %s\n", regi[a0], regi[a1], lprint)
+
+				// Set sign.
+				wr.LoadStore(load, regi[a1], p, regi[sp])
+				wr.Write("\tli\t%s, %d\n", regi[a0], '-')
+				wr.Write("\tsb\t%s, %d(%s)\n", regi[a0], 0, regi[a1])
+				wr.Ins2imm("addi", regi[a1], regi[a1], 1)
+				wr.LoadStore(store, regi[a1], p, regi[sp])
+
+				wr.Label(lprint)
+
+				// Set length of string in a2 = p - sp.
+				wr.LoadStore(load, regi[a0], p, regi[sp])
+				wr.Ins3("sub", regi[a2], regi[a0], regi[sp])
+
+				// Write integer from buffer to stdout.
+				wr.Write("\tli\t%s, %d\n", regi[a7], sysWrite)            // Syscall write.
+				wr.Write("\tli\t%s, %d\n", regi[a0], stdout)              // Write to stdout.
+				wr.Write("\taddi\t%s, %s, %d\n", regi[a1], regi[sp], buf) // Address of first character.
+				//wr.Write("\tli\t%s, %d\n", regi[a2], len(chars))          // Length of character stream.
+				wr.Write("\tecall\n") // Call write.
+
+				// Restore a0 and a1 from stack.
+				wr.Write("\t%s\t%s, %d(%s)\n", load, regi[a0], wordSize, regi[sp])
+				wr.Write("\t%s\t%s, %d(%s)\n", load, regi[a1], wordSize<<1, regi[sp])
+
+				// De-allocate temporary stack.
+				wr.Ins2imm("addi", regi[sp], regi[sp], buf)
+			} else {
+				// Floating point.
+
+				// The below procedure is effectively the floatToChars function defined in this file
+				// compiled with GodBolt for RISC-V.
+
+				// TODO: implement.
+			}
 		default:
 			return fmt.Errorf("can't print item of type %s", e1.String())
 		}
@@ -104,17 +266,20 @@ func floatToChars(f float32) string {
 	ip := int(f)           // Integer part.
 	fp := f - float32(ip)  // Float part.
 	istr := intToChars(ip) // Convert integer part to string.
+	i1 := len(istr)
 	if sign {
 		copy(res[1:], istr) // Copy into result, but preserve one space for sign bit.
 		res[0] = '-'
+		i1++
 	} else {
 		copy(res, istr) // Copy into result.
 	}
-	res[len(istr)] = '.' // Add decimal point.
+	res[i1] = '.' // Add decimal point.
 
-	i1 := len(istr)+1 // Position of first decimal.
-	fp = fp * float32(math.Pow(10, 4)) // 4-digit precision.
-	fstr := intToChars(int(f))
+	i1++                // Position of first decimal.
+	//fp = fp * float32(math.Pow(10, 4)) // 4-digit precision.
+	fp *= 10000
+	fstr := intToChars(int(fp))
 	copy(res[i1:], fstr)
 	i1 += len(fstr)
 	return string(res[:i1])

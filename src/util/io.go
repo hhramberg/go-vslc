@@ -59,9 +59,14 @@ func (w *Writer) Ins3(op, rd, rs1, rs2 string) {
 	w.sb.WriteString(fmt.Sprintf("\t%s\t%s, %s, %s\n", op, rd, rs1, rs2))
 }
 
+// LoadStore writes a load or store instruction of register reg with offset to the register pointer (usually sp or fp).
+func (w *Writer) LoadStore(op, reg string, offset int, pointer string) {
+	w.sb.WriteString(fmt.Sprintf("\t%s\t%s, %d(%s)\n", op, reg, offset, pointer))
+}
+
 // Label writes a one-line label with the given name.
 func (w *Writer) Label(name string) {
-	w.sb.WriteString(fmt.Sprintf("\n%s:\n", name))
+	w.sb.WriteString(fmt.Sprintf("%s:\n", name))
 }
 
 // Flush empties the Writer's buffer and sends the buffer data to the

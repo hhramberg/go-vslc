@@ -75,7 +75,7 @@ const (
 	x31        // Temp (caller saved).
 )
 
-// Double precision floating point registers from the D extension.
+// Floating point registers from the F extension.
 const (
 	f0 = iota
 	f1
@@ -543,7 +543,7 @@ func (rf *registerFile) loadIdentifierToReg(name string, f *ir.Symbol, wr *util.
 
 // saveRegToIdentifier takes the contents of the register reg and saves it to the memory space allocated to
 // identifier with the given name.
-func (reg *register) saveRegToIdentifier(name string, wr *util.Writer, st *util.Stack) {
+func (r *register) saveRegToIdentifier(name string, wr *util.Writer, st *util.Stack) {
 	s, _ := ir.GetEntry(name, st) // Safe, exceptions are caught in intermediate validate stage.
 
 	wr.Write("# Storing register to identifier %q\n", s.Name) // TODO: delete.
@@ -554,11 +554,11 @@ func (reg *register) saveRegToIdentifier(name string, wr *util.Writer, st *util.
 				// Get from current stack.
 				idx := wordSize << 1 // ra and p are stored on top of the stack.
 				idx += (s.Seq + 1) * wordSize
-				wr.Write("\t%s\t%s, -%d(%s)\n", store, reg.String(), idx, regi[fp])
+				wr.Write("\t%s\t%s, -%d(%s)\n", store, r.String(), idx, regi[fp])
 			} else {
 				// Get from previous stack.
 				idx := (s.Seq - argsReg) * wordSize
-				wr.Write("\t%s\t%s, %d(%s)\n", store, reg.String(), idx, regi[fp])
+				wr.Write("\t%s\t%s, %d(%s)\n", store, r.String(), idx, regi[fp])
 			}
 		case ir.SymLocal:
 			idx := wordSize << 1 // ra and p are stored on top of the stack.
@@ -568,10 +568,10 @@ func (reg *register) saveRegToIdentifier(name string, wr *util.Writer, st *util.
 			} else {
 				idx += s.Nparams * wordSize
 			}
-			wr.Write("\t%s\t%s, -%d(%s)\n", store, reg.String(), idx, regi[fp])
+			wr.Write("\t%s\t%s, -%d(%s)\n", store, r.String(), idx, regi[fp])
 		case ir.SymGlobal:
-			wr.Write("\tlui\t%s, %%hi(%s)\n", reg.String(), s.Name)
-			wr.Write("\t%s\t%s, %%lo(%s)(%s)\n", store, reg.String(), s.Name, reg.String())
+			wr.Write("\tlui\t%s, %%hi(%s)\n", r.String(), s.Name)
+			wr.Write("\t%s\t%s, %%lo(%s)(%s)\n", store, r.String(), s.Name, r.String())
 		}
 	} else {
 		switch s.Typ {
@@ -580,11 +580,11 @@ func (reg *register) saveRegToIdentifier(name string, wr *util.Writer, st *util.
 				// Get from current stack.
 				idx := wordSize << 1 // ra and p are stored on top of the stack.
 				idx += (s.Seq + 1) * wordSize
-				wr.Write("\tf%s\t%s, -%d(%s)\n", store, reg.String(), idx, regi[fp])
+				wr.Write("\tf%s\t%s, -%d(%s)\n", store, r.String(), idx, regi[fp])
 			} else {
 				// Get from previous stack.
 				idx := (s.Seq - argsReg) * wordSize
-				wr.Write("\tf%s\t%s, %d(%s)\n", store, reg.String(), idx, regi[fp])
+				wr.Write("\tf%s\t%s, %d(%s)\n", store, r.String(), idx, regi[fp])
 			}
 		case ir.SymLocal:
 			idx := wordSize << 1 // ra and p are stored on top of the stack.
@@ -594,10 +594,10 @@ func (reg *register) saveRegToIdentifier(name string, wr *util.Writer, st *util.
 			} else {
 				idx += s.Nparams * wordSize
 			}
-			wr.Write("\tf%s\t%s, -%d(%s)\n", store, reg.String(), idx, regi[fp])
+			wr.Write("\tf%s\t%s, -%d(%s)\n", store, r.String(), idx, regi[fp])
 		case ir.SymGlobal:
-			wr.Write("\tlui\t%s, %%hi(%s)\n", reg.String(), s.Name)
-			wr.Write("\tf%s\t%s, %%lo(%s)(%s)\n", store, reg.String(), s.Name, reg.String())
+			wr.Write("\tlui\t%s, %%hi(%s)\n", r.String(), s.Name)
+			wr.Write("\tf%s\t%s, %%lo(%s)(%s)\n", store, r.String(), s.Name, r.String())
 		}
 	}
 }

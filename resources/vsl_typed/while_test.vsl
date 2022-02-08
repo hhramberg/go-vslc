@@ -2,9 +2,9 @@
 // This program is a simple test of while loops, counting down from 19 to 0
 // and skipping 10 (if continue is implemented)
 
-def while_test ()
+def while_test () int
 begin
-    var a
+    var a int
     a := 20
     print a
     if a > 0 then print "foobar"

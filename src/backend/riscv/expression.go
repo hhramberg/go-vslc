@@ -12,6 +12,8 @@ import (
 // ----- Functions -----
 // ---------------------
 
+// TODO: set result of expression in a0, and operands for binary a0 and a1.
+
 // genExpression generates a binary or unary expression and returns a pointer to the register where the result is put.
 // An error is returned if something goes wrong.
 func genExpression(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *registerFile) (*register, error) {

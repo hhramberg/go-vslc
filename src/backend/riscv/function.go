@@ -10,8 +10,8 @@ import (
 func genFunction(n *ir.Node, wr *util.Writer, st, ls *util.Stack, rf *registerFile) error {
 	name := n.Children[0].Data.(string)
 	//returnType := n.Children[1].Data.(string)
-	//params := n.Children[2].Children // slice of typed variable lists.
-	body := n.Children[3] // Function body.
+	params := n.Children[2].Children // slice of typed variable lists.
+	body := n.Children[3]            // Function body.
 
 	fun := n.Entry // Symbol table entry for function.
 
@@ -20,20 +20,50 @@ func genFunction(n *ir.Node, wr *util.Writer, st, ls *util.Stack, rf *registerFi
 	if fun.Nparams > 8 {
 		np += fun.Nparams - 8
 	}
-	N := (np + fun.Nlocals) * wordSize // Number of bytes of data elements required by function.
+	N := (fun.Nparams + fun.Nlocals) * wordSize // Number of bytes of data elements required by function.
 	if res := N % stackAlign; res != 0 {
 		N += res // Adjust stack alignment.
 	}
 
 	// Allocate stack.
+	wr.Write("\n")
 	wr.Label(name)
 	wr.Ins2imm("addi", regi[sp], regi[sp], -(N + (wordSize << 1)))        // Grow stack downwards.
-	wr.Write("\t%s\t%s, %d(%s)\n", store, regi[ra], N+wordSize, regi[sp]) // Store old sp to return address.
-	wr.Write("\t%s\t%s, %d(%s)\n", store, regi[fp], N, regi[sp])          // Store old sp to frame pointer.
-	wr.Ins2imm("addi", regi[fp], regi[sp], N+(wordSize<<1))               // Set fp to be frame pointer.
+	wr.Write("\t%s\t%s, %d(%s)\n", store, regi[ra], N+wordSize, regi[sp]) // Store old return address.
+	wr.Write("\t%s\t%s, %d(%s)\n", store, regi[fp], N, regi[sp])          // Store old frame pointer.
+	wr.Ins2imm("addi", regi[fp], regi[sp], N+(wordSize<<1))               // Set fp to be frame pointer of this function's stack.
 
-	// Check for floating point
-	
+	// Put arguments from registers on stack.
+	rp := fun.Nparams
+	if rp > argsReg {
+		rp = argsReg
+	}
+	for i1 := 0; i1 < rp; {
+		for _, e2 := range params {
+			if i1 >= rp {
+				break
+			}
+			for _, e3 := range e2.Children {
+				if i1 >= rp {
+					break
+				}
+				idx := wordSize << 1 // First two words are ra and fp of caller.
+				idx += wordSize * (i1 + 1)
+				param, _ := fun.Locals.Get(e3.Data.(string)) // Safe; we know it exists, else it would have called error in validation.
+				if param.DataTyp == ir.DataInteger {
+					wr.Write("\t%s\t%s, -%d(%s)\n", store, regi[a0+i1], idx, regi[fp])
+				} else {
+					wr.Write("\tf%s\t%s, -%d(%s)\n", store, regf[fa0+i1], idx, regi[fp])
+				}
+				i1++
+			}
+		}
+	}
+
+	// Arguments with sequence numbers >= argsReg are already on stack.
+
+	// Local definitions are allocated space on stack, but they have not yet been assigned a value.
+	// VSL doesn't support assignment on declaration.
 
 	// Generate function body.
 	if err := genAsm(body, fun, wr, st, ls, rf); err != nil {
