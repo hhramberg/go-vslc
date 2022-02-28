@@ -4,13 +4,14 @@ package riscv
 
 import (
 	"fmt"
+	"vslc/src/backend/xtoa"
 	"vslc/src/ir"
 	"vslc/src/util"
 )
 
 // genPrint generates a print statement recursively. A error is returned if something went wrong.
 func genPrint(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *registerFile) error {
-	wr.Write("# Print statement begin.\n") // TODO: delete.
+	wr.Write("; ----- Print statement begin -----\n") // TODO: delete.
 
 	for _, e1 := range n.Children[0].Children {
 		// For every item to be printed.
@@ -23,12 +24,11 @@ func genPrint(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *reg
 			wr.Ins2imm("addi", regi[a3], regi[zero], sysWrite)                          // System call for write. TODO: validate for 64/32-bit, may be different.
 			wr.Write("\tecall\n")                                                       // Call the system call write.
 		case ir.INTEGER_DATA, ir.FLOAT_DATA:
-			wr.Write("# Print constant.\n") // TODO: delete.
 			var chars string
 			if e1.Typ == ir.INTEGER_DATA {
-				chars = intToChars(e1.Data.(int))
+				chars = xtoa.ItoA(e1.Data.(int))
 			} else {
-				chars = floatToChars(ir.Floats.Ft[e1.Data.(int)])
+				chars = xtoa.FtoA(ir.Floats.Ft[e1.Data.(int)])
 			}
 
 			// Calculate character buffer and stack alignment.
@@ -116,7 +116,7 @@ func genPrint(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *reg
 				wr.Write("\tli\t%s, %d\n", regi[a0], base) // Base = 10.
 
 				// Store integer to print on stack.
-				wr.Write("\t%s\t%s, %d(s%)\n", store, r.String(), i, regi[sp])
+				wr.Write("\t%s\t%s, %d(%s)\n", store, r.String(), i, regi[sp])
 
 				// Buffer[21] is at address[sp] + buf.
 
@@ -139,7 +139,7 @@ func genPrint(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *reg
 
 				// Set number positive.
 				wr.LoadStore(load, regi[a0], i, regi[sp])
-				wr.Write("\tli\t%s, %d\n", regi[a1], i, regi[sp])
+				wr.Write("\tli\t%s, %d\n", regi[a1], i)
 				wr.Ins3("mul", regi[a0], regi[a0], regi[a1])
 				wr.LoadStore(store, regi[a0], i, regi[sp])
 
@@ -209,78 +209,41 @@ func genPrint(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *reg
 
 				// De-allocate temporary stack.
 				wr.Ins2imm("addi", regi[sp], regi[sp], buf)
+
+				// ----------------------------
+				// ... or use printf.
+
+				// See: https://web.eecs.utk.edu/~smarz1/courses/ece356/notes/assembly/
+
+				// Call printf from standard library.
+
+				// Load address of static global variable for string "%f" into a0.
+				//wr.Write("\tla\t%s, _STR_printf_i\n", regi[a0])
+
+				// Move float to write into a1.
+				//wr.Write("\tmv\t%s, %s\n", regi[a1], r.String())
+
+				// Call printf.
+				//wr.Write("\tcall\tprintf\n")
 			} else {
 				// Floating point.
+				// See: https://web.eecs.utk.edu/~smarz1/courses/ece356/notes/assembly/
 
-				// The below procedure is effectively the floatToChars function defined in this file
-				// compiled with GodBolt for RISC-V.
+				// Call printf from standard library.
 
-				// TODO: implement.
+				// Load address of static global variable for string "%f" into a0.
+				wr.Write("\tla\t%s, _STR_printf_f\n", regi[a0])
+
+				// Move float to write into fa0.
+				wr.Write("\tmv\t%s, %s\n", regi[fa0], r.String())
+
+				// Call printf.
+				wr.Write("\tcall\tprintf\n")
 			}
 		default:
 			return fmt.Errorf("can't print item of type %s", e1.String())
 		}
 	}
-	wr.Write("# Print statement end.\n") // TODO: delete.
+	wr.Write("; ----- Print statement end -----\n") // TODO: delete.
 	return nil
-}
-
-// intToChars converts an integer to a byte stream of ASCII characters.
-func intToChars(i int) string {
-	var res []byte
-	var sign bool
-	if i < 0 {
-		sign = true
-		res = make([]byte, 20) // (2^64) - 1 is ~ 1,9e19 = 20 characters at most.
-		i = -i
-	} else {
-		res = make([]byte, 21) // Add one for sign.
-	}
-	base := 10
-	end := &(res[len(res)-1])
-	r := end
-	i1 := len(res) - 1
-	for ; i1 >= 0 && i != 0; i1-- {
-		*r = byte((i % base) + '0')
-		r = &(res[i1-1])
-		i /= base
-	}
-
-	if sign {
-		res[i1] = '-'
-		i1--
-	}
-
-	return string(res[i1+1:])
-}
-
-// floatToChars converts a float to a byte stream of ASCII characters.
-func floatToChars(f float32) string {
-	res := make([]byte, 32) // float32 has 4-decimal precision.
-	var sign bool
-	if f < 0 {
-		sign = true
-		f = -f
-	}
-
-	ip := int(f)           // Integer part.
-	fp := f - float32(ip)  // Float part.
-	istr := intToChars(ip) // Convert integer part to string.
-	i1 := len(istr)
-	if sign {
-		copy(res[1:], istr) // Copy into result, but preserve one space for sign bit.
-		res[0] = '-'
-		i1++
-	} else {
-		copy(res, istr) // Copy into result.
-	}
-	res[i1] = '.' // Add decimal point.
-
-	i1++                // Position of first decimal.
-	//fp = fp * float32(math.Pow(10, 4)) // 4-digit precision.
-	fp *= 10000
-	fstr := intToChars(int(fp))
-	copy(res[i1:], fstr)
-	i1 += len(fstr)
-	return string(res[:i1])
 }

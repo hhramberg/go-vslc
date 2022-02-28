@@ -36,8 +36,8 @@ type registerFile struct {
 // ----- Constants -----
 // ---------------------
 
-const labelFloat = "CFP32_" // Constant prefix of constant floats in data segment.
-const labelString = "STR_"  // Constant prefix of strings in data segment.
+const labelFloat = "_CFP32_" // Constant prefix of constant floats in data segment.
+const labelString = "_STR_"  // Constant prefix of strings in data segment.
 
 // Base registers (integer).
 const (
@@ -221,6 +221,12 @@ const sysWrite = 64 // For writing to file descriptor.
 // stdout defines the Unix file descriptor for standard out.
 const stdout = 1
 
+// Error codes.
+const errWrongArgc = 1       // Returned when the number of CLI arguments doesn't match the number of parameters.
+const errArgTypeMismatch = 2 // Returned when CLI argument is not of correct type.
+const errArgNotInt = 3       // Returned if the CLI argument is not an integer number.
+const errArgNotFloat = 4     // Returned when the CLI argument is not a float number.
+
 // maxImm defines the maximum 12-bit immediate.
 const maxImm = 2047
 
@@ -344,10 +350,14 @@ func GenRiscv(opt util.Options) error {
 		store = "sw"
 	}
 
+	// Used for synchronising worker threads with main thread, if any.
+	// By setting this at current scope enables main thread to generate and buffer static and
+	// global .data while worker threads generate .text section.
+	wg := sync.WaitGroup{}
+
 	// Generate functions.
 	if opt.Threads > 1 {
 		// Parallel.
-		wg := sync.WaitGroup{} // Used for synchronising worker threads with main thread.
 
 		// Initiate worker threads.
 		t := opt.Threads                       // Max number of threads to initiate.
@@ -383,35 +393,29 @@ func GenRiscv(opt util.Options) error {
 
 				// Validate function body.
 				for i2 := 0; i2 < j; i2++ {
-					// TODO: Create a global list of global functions?
-					if ir.Root.Children[0].Children[i+i2].Typ == ir.FUNCTION {
-						w := util.NewWriter()                   // Create output handler.
-						rf := regFile                           // Copy register file.
-						f := ir.Root.Children[0].Children[i+i2] // Function to generate.
-						st := util.Stack{}                      // Stack for definition scopes.
-						ls := util.Stack{}                      // Label stack for break/continue.
-						st.Push(&ir.Global)
-						st.Push(&(f.Entry.Locals))
-						if err := genFunction(f, &w, &st, &ls, &rf); err != nil {
-							errs.mx.Lock()
-							errs.err = append(errs.err, err)
-							errs.mx.Unlock()
-						}
-
-						// Deallocate stack. Can be omitted?
-						st.Pop()
-						st.Pop()
-
-						// Burst write function assembly to output and close writer.
-						w.Flush()
-						w.Close()
+					w := util.NewWriter() // Create output handler.
+					rf := regFile         // Copy register file.
+					f := ir.Funcs.F[i+i2] // Function to generate.
+					st := util.Stack{}    // Stack for definition scopes.
+					ls := util.Stack{}    // Label stack for break/continue.
+					st.Push(&ir.Global)
+					st.Push(&(f.Locals))
+					if err := genFunction(f.Node, &w, &st, &ls, &rf); err != nil {
+						errs.mx.Lock()
+						errs.err = append(errs.err, err)
+						errs.mx.Unlock()
 					}
+
+					// Deallocate stack. Can be omitted?
+					st.Pop()
+					st.Pop()
+
+					// Burst write function assembly to output and close writer.
+					w.Flush()
+					w.Close()
 				}
 			}(i1, m, &wg)
 		}
-
-		// Wait for worker threads to finish.
-		wg.Wait()
 
 		// Check for errors.
 		if len(errs.err) > 0 {
@@ -424,44 +428,57 @@ func GenRiscv(opt util.Options) error {
 		st.Push(&ir.Global)   // Push global symbol table on stack.
 		w := util.NewWriter() // Create output handler.
 		rf := regFile         // Copy register file.
-		for _, e1 := range ir.Root.Children[0].Children {
-			if e1.Typ == ir.FUNCTION {
-				st.Push(&(e1.Entry.Locals))
-				if err := genFunction(e1, &w, &st, &ls, &rf); err != nil {
-					return err
-				}
-				st.Pop()
-
-				// Burst write function assembly to output.
-				w.Flush()
+		for _, e1 := range ir.Funcs.F {
+			st.Push(&(e1.Locals))
+			if err := genFunction(e1.Node, &w, &st, &ls, &rf); err != nil {
+				return err
 			}
+			st.Pop()
+
+			// Burst write function assembly to output.
+			w.Flush()
 		}
+		st.Pop()
 
 		// Close writer.
 		w.Close()
 	}
 	// Global data and constants go below .text section.
 
-	// Write strings and float constants to data segment.
+	// Write constants and implicits.
 	wr := util.NewWriter()
-	wr.Write(".data\n# Strings.\n")
+
+	// Generate main.
+	if err := genMain(ir.Funcs.F[0], &wr); err != nil {
+		return err
+	}
+
+	// Write strings and float constants to data segment.
+	wr.Write("\n.data\n; ----- Strings -----\n")
 	for i1, e1 := range ir.Strings.St {
 		wr.Write("%s%d:\n\t.asciz\t%q\n", labelString, i1, e1)
 	}
-	wr.Write("\n# Floating point constants.\n")
+
+	// String constants when calling printf for integer and float at run-time output.
+	wr.Write("_STR_printf_f:\n\t.asciz\t\"%%f\"\n")
+	wr.Write("_STR_printf_i:\n\t.asciz\t\"%%d\"\n")
+
+	wr.Write("\n; ----- Floating point constants -----\n")
 	for i1, e1 := range ir.Floats.Ft {
 		wr.Write("%s%d:\n\t.word\t%x\n", labelFloat, i1, math.Float32bits(e1))
 	}
 
 	// Write global variables to data segment.
-	// TODO: This is currently for 64-bit variables. Consult Michael for 32/64-bit operation.
-	wr.Write("# Global variables.\n")
+	wr.Write("; ----- Global variables -----\n")
 	for _, v := range ir.Global.HT {
 		if v.Typ == ir.SymGlobal {
 			// VSL doesn't support assignment at declaration. All variables are initially 0.
-			wr.Write("%s:\n\t.8byte\t%x\n", v.Name, 0)
+			wr.Write("%s:\n\t.%dbyte\t%x\n", v.Name, wordSize, 0)
 		}
 	}
+
+	// Wait for worker threads to finish, if any.
+	wg.Wait()
 
 	wr.Flush()
 	wr.Close()
@@ -481,7 +498,6 @@ func (r *register) String() string {
 func (rf *registerFile) loadIdentifierToReg(name string, f *ir.Symbol, wr *util.Writer, st *util.Stack) *register {
 	s, _ := ir.GetEntry(name, st) // Safe, exceptions are caught in intermediate validate stage.
 
-	wr.Write("# Loading identifier %q\n", s.Name) // TODO: delete.
 	if s.DataTyp == ir.DataInteger {
 		reg := rf.lruI()
 		switch s.Typ {
@@ -685,5 +701,123 @@ func genAsm(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *r
 			}
 		}
 	}
+	return nil
+}
+
+// genMain generates the main function for program entry.
+func genMain(f *ir.Symbol, wr *util.Writer) error {
+	wr.Write("\n")
+	wr.Label("_main")
+
+	// Program order.
+	// - Find argc.
+	// - Translate arguments (if any) from string to integer/floats.
+	// - Put them in registers/stack.
+	// - Call the FIRST function defined in the VSL source file.
+	// - Take return value, from a0 and return to shell.
+
+	// Allocate stack.
+	sa := wordSize << 2
+	if sa%stackAlign != 0 {
+		sa += stackAlign - sa%stackAlign
+	}
+	wr.Ins2imm("addi", regi[sp], regi[sp], -sa) // two words for sp and fp, two words for argc and argv.
+	wr.LoadStore(store, regi[sp], wordSize*3, regi[sp])
+	wr.LoadStore(store, regi[ra], wordSize<<1, regi[sp])
+	wr.Ins2imm("addi", regi[fp], regi[sp], wordSize<<2)
+
+	// Stack:
+	//
+	// sp <--- fp
+	// ra
+	// argc
+	// argv
+	// <--- sp
+
+	// Store argc and argv on stack.
+	wr.LoadStore(store, regi[a0], -(wordSize << 1), regi[fp])
+	wr.LoadStore(store, regi[a1], -(wordSize * 3), regi[fp])
+
+	// Check for arguments by checking if argc == 0.
+	largend := util.NewLabel(util.LabelIfEnd)
+	wr.Write("\tli\t%s, %d\n", regi[t0], 0)
+	wr.Ins3("beq", regi[a0], regi[t0], largend)
+
+	// Continue sequentially if arguments were defined.
+
+	// Check if number of arguments == number of parameters in function f.
+	lbl := util.NewLabel(util.LabelIfEnd)
+	wr.Write("\tli\t%s, %d\n", regi[t0], f.Nparams)
+	wr.Ins3("beq", regi[a0], regi[t0], lbl)
+
+	// Sequential: wrong number of arguments.
+	wr.Write("\tli\t%s, %d\n", regi[a7], sysExit)
+	wr.Write("\tli\t%s, %d\n", regi[a0], errWrongArgc)
+	wr.Write("\tecall\n")
+
+	wr.Label(lbl)
+
+	// Iterate over arguments.
+	lloophead := util.NewLabel(util.LabelWhileHead)
+	// For all argc arguments.
+	wr.Write("\tmv\t%s, %s\n", regi[s1], regi[a0]) // Save argc for breaking loop.
+	wr.Write("\tli\t%s, %d\n", regi[s2], 0)        // Loop index i.
+	wr.Label(lloophead)
+	// Check if continue loop or break.
+	wr.Write("\tbge\t%s, %s, %s\n", regi[s2], regi[s1], largend) // Break if loop index i >= argc.
+
+	// Loop body.
+	wr.LoadStore(load, regi[t0], -(wordSize * 3), regi[fp]) // Load argv into t0.
+	wr.Write("\tli\t%s, %d\n", regi[t1], wordSize)          // Load word size.
+	wr.Ins3("mul", regi[t0], regi[s2], regi[t1])            // Calculate offset from argv (argv[i]).
+	wr.Ins3("addi", regi[a0], regi[t0], regi[s2])           // Put &(argv[i]) in a0.
+
+	// Call atof and atol to parse strings to number. Try integer first.
+	wr.Write("\tcall\tatol\n")
+
+	// Check for integer errors.
+	linterr := util.NewLabel(util.LabelIfEnd)
+	wr.Write("\tli\t%s, %d\n", regi[t0], 0)
+	wr.Write("\tbne\t%s, %s, %s\n", regi[a0], regi[t0], linterr)
+	// Begin IF.
+
+	// Check if argument is float.
+	wr.LoadStore(load, regi[t0], -(wordSize * 3), regi[fp]) // Load argv into t0.
+	wr.Write("\tli\t%s, %d\n", regi[t1], wordSize)          // Load word size.
+	wr.Ins3("mul", regi[t0], regi[s2], regi[t1])            // Calculate offset from argv (argv[i]).
+	wr.Ins3("addi", regi[a0], regi[t0], regi[s2])           // Put &(argv[i]) in a0.
+
+	wr.Write("\tcall\tatof\n")
+
+	// Check for float errors.
+	wr.Write("\tli\t%s, %d\n", regi[t0], 0)
+	wr.Write("\tfcvt.d.wu\t%s, %s\n", regi[fa1], regi[t0])
+	wr.Write("\tbne\t%s, %s, %s\n", regi[fa0], regi[fa1], linterr)
+	// Begin IF.
+
+	// End IF.
+	wr.Label(linterr)
+
+	// Loop body end.
+
+	// Update loop index and jump to head.
+	wr.Ins2imm("addi", regi[s2], regi[s2], 1)
+	wr.Write("\tj\t%s\n", lloophead)
+	wr.Label(largend)
+	// End arguments.
+
+	// Call first function.
+	wr.Write("\tcall\t%s\n", f.Name)
+
+	// De-allocate stack.
+	wr.LoadStore(store, regi[ra], wordSize<<1, regi[sp])
+	wr.LoadStore(store, regi[sp], wordSize*3, regi[sp])
+	wr.Ins2imm("addi", regi[sp], regi[sp], sa)
+
+	// Exit the program.
+	wr.Write("\tli\t%s, %d\n", regi[a7], sysExit)
+	// a0 is already set by this point.
+	wr.Write("\tecall\n")
+
 	return nil
 }

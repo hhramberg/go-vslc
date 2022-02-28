@@ -13,7 +13,7 @@ def newton ( n int ) int
 begin
     var square_root int
     square_root := improve ( n, 1 )
-    print "The square root of", n, "is", square_root, 123
+    print "The square root of", n, "is", square_root
     return 0
 end
 

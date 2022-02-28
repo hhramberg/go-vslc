@@ -165,25 +165,23 @@ func ValidateTree(opt util.Options) error {
 			go func(i, j int, wg *sync.WaitGroup) {
 				defer wg.Done() // Alert main thread that this worker is done when returning.
 
+				st := util.Stack{} // Scope stack.
+				st.Push(&Global)
+
 				// Validate function body.
 				for i2 := 0; i2 < j; i2++ {
-					// TODO: Create a global list of global functions?
-					if Root.Children[0].Children[i+i2].Typ == FUNCTION {
-						f := Root.Children[0].Children[i+i2]
-						st := util.Stack{}
-						st.Push(&Global)
-						st.Push(&(f.Entry.Locals))
-						if err := f.validate(&st); err != nil {
-							errs.mx.Lock()
-							errs.err = append(errs.err, err)
-							errs.mx.Unlock()
-						}
-
-						// Deallocate stack. Can be omitted?
-						st.Pop()
-						st.Pop()
+					f := Funcs.F[i+i2]
+					st.Push(&(f.Locals))
+					if err := f.Node.validate(&st); err != nil {
+						errs.mx.Lock()
+						errs.err = append(errs.err, err)
+						errs.mx.Unlock()
 					}
+
+					// Deallocate stack. Can be omitted?
+					st.Pop()
 				}
+				st.Pop()
 			}(i1, m, &wg)
 		}
 
@@ -198,15 +196,14 @@ func ValidateTree(opt util.Options) error {
 		// Sequential.
 		st := util.Stack{} // Stack used for identifier lookup.
 		st.Push(&Global)   // Push global symbol table on stack.
-		for _, e1 := range Root.Children[0].Children {
-			if e1.Typ == FUNCTION {
-				st.Push(&(e1.Entry.Locals))
-				if err := e1.validate(&st); err != nil {
-					return err
-				}
-				st.Pop()
+		for _, e1 := range Funcs.F {
+			st.Push(&(e1.Locals))
+			if err := e1.Node.validate(&st); err != nil {
+				return err
 			}
+			st.Pop()
 		}
+		st.Pop()
 	}
 	return nil
 }
@@ -219,23 +216,27 @@ func (n *Node) validate(st *util.Stack) error {
 			return err
 		}
 	case EXPRESSION:
-		if _, err := n.validateExpr(st); err != nil {
+		if _, err := n.validateExpression(st); err != nil {
 			return err
 		}
 	case RELATION:
-		if err := n.validateRel(st); err != nil {
+		if err := n.validateRelation(st); err != nil {
 			return err
 		}
 	case BLOCK:
 		if n.Entry != nil {
 			// FUNCTION BLOCKs don't have Entry, because the entry is bound to the FUNCTION node.
 			st.Push(&(n.Entry.Locals))
-			st.Pop()
 		}
+
+		// Validate children of block.
 		for _, e1 := range n.Children {
 			if err := e1.validate(st); err != nil {
 				return err
 			}
+		}
+		if n.Entry != nil {
+			st.Pop()
 		}
 	default:
 		for _, e1 := range n.Children {
@@ -247,9 +248,9 @@ func (n *Node) validate(st *util.Stack) error {
 	return nil
 }
 
-// validateExpr validates an expression and returns its resulting datatype.
+// validateExpression validates an expression and returns its resulting datatype.
 // If the expression is illegal, an error is returned.
-func (n *Node) validateExpr(st *util.Stack) (dataType, error) {
+func (n *Node) validateExpression(st *util.Stack) (dataType, error) {
 	if n.Data == nil {
 		// FUNCTION call.
 		name := n.Children[0].Data.(string)
@@ -272,7 +273,7 @@ func (n *Node) validateExpr(st *util.Stack) (dataType, error) {
 
 						switch arg.Typ {
 						case EXPRESSION:
-							if t, err := arg.validateExpr(st); err != nil {
+							if t, err := arg.validateExpression(st); err != nil {
 								return 0, err
 							} else {
 								if t != param.Entry.DataTyp {
@@ -337,7 +338,7 @@ func (n *Node) validateExpr(st *util.Stack) (dataType, error) {
 			c0t = DataInteger
 		case EXPRESSION:
 			var err error
-			if c0t, err = c0.validateExpr(st); err != nil {
+			if c0t, err = c0.validateExpression(st); err != nil {
 				return c0t, err
 			}
 		}
@@ -357,7 +358,7 @@ func (n *Node) validateExpr(st *util.Stack) (dataType, error) {
 			c1t = DataInteger
 		case EXPRESSION:
 			var err error
-			if c1t, err = c1.validateExpr(st); err != nil {
+			if c1t, err = c1.validateExpression(st); err != nil {
 				return c1t, err
 			}
 		}
@@ -418,14 +419,14 @@ func (n *Node) validateExpr(st *util.Stack) (dataType, error) {
 	return 0, fmt.Errorf("malformed expression on line %d:%d", n.Line, n.Pos)
 }
 
-// validateRel validates a relation. If the relation is illegal, an error is returned.
-func (n *Node) validateRel(st *util.Stack) error {
+// validateRelation validates a relation. If the relation is illegal, an error is returned.
+func (n *Node) validateRelation(st *util.Stack) error {
 	var dt1, dt2 dataType
 	c1 := n.Children[0]
 	c2 := n.Children[1]
 	switch c1.Typ {
 	case EXPRESSION:
-		if dt, err := c1.validateExpr(st); err != nil {
+		if dt, err := c1.validateExpression(st); err != nil {
 			return err
 		} else {
 			dt1 = dt
@@ -444,7 +445,7 @@ func (n *Node) validateRel(st *util.Stack) error {
 	}
 	switch c2.Typ {
 	case EXPRESSION:
-		if dt, err := n.Children[0].validateExpr(st); err != nil {
+		if dt, err := n.Children[0].validateExpression(st); err != nil {
 			return err
 		} else {
 			dt2 = dt
@@ -486,10 +487,10 @@ func (n *Node) validateRel(st *util.Stack) error {
 func (n *Node) validateAssign(st *util.Stack) error {
 	c1 := n.Children[0]
 	c2 := n.Children[1]
-	var dt1, dt2 dataType
+	var c1t, c2t dataType
 
 	if s, err := GetEntry(c1.Data.(string), st); err == nil {
-		dt1 = s.DataTyp
+		c1t = s.DataTyp
 	} else {
 		return fmt.Errorf("identifier %q not declared, at line %d:%d",
 			c1.Data.(string), c1.Line, c1.Pos)
@@ -497,27 +498,27 @@ func (n *Node) validateAssign(st *util.Stack) error {
 
 	switch c2.Typ {
 	case EXPRESSION:
-		if dt, err := c2.validateExpr(st); err != nil {
+		if dt, err := c2.validateExpression(st); err != nil {
 			return err
 		} else {
-			dt2 = dt
+			c2t = dt
 		}
 	case IDENTIFIER_DATA:
 		if s, err := GetEntry(c2.Data.(string), st); err == nil {
-			dt2 = s.DataTyp
+			c2t = s.DataTyp
 		} else {
 			return fmt.Errorf("identifier %q not declared, at line %d:%d",
 				c2.Data.(string), c2.Line, c2.Pos)
 		}
 	case FLOAT_DATA:
-		dt2 = DataFloat
+		c2t = DataFloat
 	case INTEGER_DATA:
-		dt2 = DataInteger
+		c2t = DataInteger
 	}
 
-	if !lutAssign[dt1][dt2] {
+	if !lutAssign[c1t][c2t] {
 		return fmt.Errorf("cannot assign %s to variable %q, %s is not assignlable to %s at line %d:%d",
-			dTyp[dt2], c1.Data.(string), dTyp[dt2], dTyp[dt1], c1.Line, c1.Pos)
+			dTyp[c2t], c1.Data.(string), dTyp[c2t], dTyp[c1t], c1.Line, c1.Pos)
 	}
 	return nil
 }

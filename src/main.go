@@ -8,6 +8,7 @@ import (
 	"vslc/src/backend"
 	"vslc/src/frontend"
 	"vslc/src/ir"
+	"vslc/src/ir/llvm"
 	"vslc/src/util"
 )
 
@@ -53,7 +54,20 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Generate symbol table.
+	if opt.LLVM {
+		defer func(){
+			if r := recover(); r != nil {
+				fmt.Println(r) // TODO: delete.
+			}
+		}()
+		if err := llvm.GenLLVM(opt, ir.Root); err != nil {
+			fmt.Printf("Error reported by LLVM: %s", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	// Generate symbol table using my implementation.
 	if err := ir.GenerateSymTab(opt); err != nil {
 		fmt.Printf("Source code error: %s\n", err)
 		os.Exit(1)

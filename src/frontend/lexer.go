@@ -120,6 +120,13 @@ func (l *lexer) run() {
 
 // emit sends an item of type typ back to the caller.
 func (l *lexer) emit(typ itemType) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Send on closed channel.
+			l.state = nil // Stop the lexer.
+		}
+	}()
+
 	l.items <- item{
 		typ:  typ,
 		val:  l.input[l.start:l.pos],

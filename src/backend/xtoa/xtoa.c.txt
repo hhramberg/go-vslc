@@ -1,0 +1,76 @@
+// xtoa.c contains C source code for generating string representations of 64-bit integers and floating point numbers.
+// The C source code was compiled into assembler which created the basis of implicit assembly code for printing
+// floats and integers at runtime without the use of stdlib printf.
+
+// ItoA returns a string representation of the signed integer i, put into the buffer str of size buf_size, with the
+// returned offset being the start index of the first digit (or sign) of the integer. The first digit (or sign) is put
+// in str[buf_size + p - end].
+long ItoA(long i, char *str, long buf_size){
+    long sign = 0;  // false.
+
+    // Check for negative value.
+    if (i < 0) {
+        sign = 1;
+        i = -i;
+    }
+
+    char *end = &(str[buf_size-1]); // Last digit of number.
+    char *p = end;                  // Current insert position.
+
+    // Append digit from back-to-front.
+    do {
+        *p = (i % 10) + '0';
+        p--;
+        i /= 10;
+    }while(i != 0);
+
+    // Prepend sign if i is negative.
+    if (sign != 0) {
+        *p = '-';
+        p--;
+    }
+
+    // Return length of string.
+    return end - p;
+}
+
+// ItoA returns a string representation of the signed floating point number f, put into the buffer str of size buf_size,
+// with the returned being the length of the string. The first digit is put in str[0].
+long FtoA(double f, char *str, long buf_size) {
+    char *p = str;      // Current position.
+    char *begin = str;  // For calculating returned length of string.
+    char tmp[32];       // Stack aligned with some spill.
+    long strl;          // Length of returned integer parts.
+
+    // Check for negative value.
+    if(f < 0.0){
+        f = -f;
+        *p = '-';
+        p++;
+    }
+
+    long ip = (long)f;          // Integer part.
+    double fp = f - (double)ip; // Float part.
+    fp *= 10000;                // 4 decimal place precision.
+
+    // Copy integer part.
+    strl = ItoA(ip, tmp, 32);
+    for(long i1 = 0; i1 < strl; i1++){
+        *p = tmp[32-strl+i1];
+        p++;
+    }
+
+    // Apply decimal delimiter.
+    *p = '.';
+    p++;
+
+    // Copy decimal part.
+    strl = ItoA((long)fp, tmp, buf_size);
+    for(long i1 = 0; i1 < strl; i1++){
+        *p = tmp[32-strl+i1];
+        p++;
+    }
+
+    // Return length of string.
+    return p - begin;
+}

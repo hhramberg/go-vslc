@@ -18,6 +18,7 @@ type Options struct {
 	Threads     int    // Thread count.
 	Verbose     bool   // Set true if compiler should log statistical data to stdout.
 	TokenStream bool   // Set true if compiler should output token stream and exit.
+	LLVM        bool   // Set true if compiler should use the LLVM framework to issue optimisations and code generaton.
 	Target      int    // Output target architecture.
 }
 
@@ -51,6 +52,9 @@ func ParseArgs() (Options, error) {
 			// Help and usage.
 			printHelp()
 			os.Exit(0)
+		case "-ll":
+			// Use LLVM IR and LLVM code generator.
+			opt.LLVM = true;
 		case "-o", "-s", "-t":
 			if i1+1 >= len(args) {
 				return opt, fmt.Errorf("got flag %s but no argument", args[i1])
@@ -118,10 +122,11 @@ func printHelp() {
 	w := tabwriter.NewWriter(os.Stdout, 6, 1, 1, 0, 0)
 	_, _ = fmt.Fprintln(w, "-h, -help\tPrints this help message and exits the application.")
 	_, _ = fmt.Fprintln(w, "--h, --help")
-	_, _ = fmt.Fprintln(w, "-o\tOutput file.")
+	_, _ = fmt.Fprintln(w, "-ll\tUse LLVM to optimise and generate output code.")
+	_, _ = fmt.Fprintln(w, "-o\tPath and name of the output file.")
 	_, _ = fmt.Fprintln(w, "-s\tPath to source VSL file.")
 	_, _ = fmt.Fprintln(w, "-t\tNumber of threads to run in parallel. Must be in range [1, %d].", maxThreads)
-	_, _ = fmt.Fprintln(w, "-target\tOutput architecture type. Can be either 'Aarch64' or 'Riscv64'. Defaults to 'Aarch64'.")
+	_, _ = fmt.Fprintln(w, "-target\tOutput architecture type. Can be either 'Aarch64', 'Riscv32' or 'Riscv64'. Defaults to 'Aarch64'.")
 	_, _ = fmt.Fprintln(w, "-ts\tOutput the tokens of the source code and exit.")
 	_, _ = fmt.Fprintln(w, "-v, -version\tPrints application version and exits the application.")
 	_, _ = fmt.Fprintln(w, "--v, --version")

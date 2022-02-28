@@ -81,6 +81,13 @@ var dTyp = []string{
 // Global symbol table.
 var Global SymTab
 
+// Funcs holds a pointer to all the globally declared functions in order of appearance
+// top-to-bottom in the source code.
+var Funcs struct {
+	F  []*Symbol
+	mx sync.Mutex
+}
+
 // Strings contains all strings defined in program being compiled.
 var Strings struct {
 	St []string   // Slice of strings defined in program.
@@ -106,11 +113,13 @@ var seqCtrl struct {
 
 // GenerateSymTab populates the symbol table for the VSL program.
 func GenerateSymTab(opt util.Options) error {
-	// Initiate global symbol table and string table.
+	// Initiate global symbol table, function pointer table, string table and float constant table.
 	Global = SymTab{
 		HT: make(map[string]*Symbol, hTabSize),
 		mx: sync.Mutex{},
 	}
+	Funcs.F = make([]*Symbol, 0, hTabSize)
+
 	Strings = struct {
 		St []string
 		mx sync.Mutex
@@ -138,6 +147,7 @@ func GenerateSymTab(opt util.Options) error {
 		// Allocate memory for errors; one per worker thread.
 		errs.err = make([]error, 0, t)
 
+		// TODO: make such that MAIN thread handles first function.
 		// Launch t threads.
 		for i1 := 0; i1 < l; i1 += n {
 			m := n
@@ -304,6 +314,16 @@ func (n *Node) bindGlobal(opt util.Options) error {
 
 		// Add function symbol to global symbol table.
 		Global.Add(&s)
+
+		// Add function to global list of functions.
+		Funcs.mx.Lock()
+		if s.Seq >= len(Funcs.F) {
+			tmp := Funcs.F
+			Funcs.F = make([]*Symbol, len(tmp)<<1) // Double the capacity of function slice.
+			copy(Funcs.F, tmp)
+		}
+		Funcs.F = append(Funcs.F, &s)
+		Funcs.mx.Unlock()
 	case DECLARATION:
 		// Global variable declaration.
 		for _, e1 := range n.Children[0].Children {

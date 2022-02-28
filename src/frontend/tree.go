@@ -23,6 +23,7 @@ func Parse(src string) error {
 
 	// Start parser.
 	if a := yyParse(l); a != 0 {
+		close(l.items)
 		return fmt.Errorf("parser returned %d", a)
 	}
 

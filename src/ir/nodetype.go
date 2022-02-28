@@ -127,6 +127,11 @@ func (n *Node) String() string {
 	}
 }
 
+// Type returns a print friendly string of the Node n' type.
+func (n *Node) Type() string {
+	return nt[n.Typ]
+}
+
 // Print recursively prints this Node and all its Children while indenting for every recursive call.
 // depth is the number of times nodes are padded to the right, having the root node with padding 0.
 // If showDepth is true the method also prints the depths of the nodes.
