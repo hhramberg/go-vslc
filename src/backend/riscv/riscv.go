@@ -360,8 +360,8 @@ func GenRiscv(opt util.Options) error {
 		// Parallel.
 
 		// Initiate worker threads.
-		t := opt.Threads                       // Max number of threads to initiate.
-		l := len(ir.Root.Children[0].Children) // Number of functions defined in program.
+		t := opt.Threads     // Max number of threads to initiate.
+		l := len(ir.Funcs.F) // Number of functions defined in program can't be higher than number of globals.
 		if t > l {
 			t = l // Cannot launch more threads than functions.
 		}
@@ -382,6 +382,7 @@ func GenRiscv(opt util.Options) error {
 		// Launch t threads.
 		for i1 := 0; i1 < l; i1 += n {
 			m := n
+			i := i1
 			if i1 < res {
 				// Indicate that this worker thread should do one more job.
 				m++
@@ -391,16 +392,16 @@ func GenRiscv(opt util.Options) error {
 			go func(i, j int, wg *sync.WaitGroup) {
 				defer wg.Done() // Alert main thread that this worker is done when returning.
 
-				// Validate function body.
+				// Generate function body.
+				st := util.Stack{} // Stack for definition scopes.
+				st.Push(&ir.Global)
 				for i2 := 0; i2 < j; i2++ {
-					w := util.NewWriter() // Create output handler.
-					rf := regFile         // Copy register file.
-					f := ir.Funcs.F[i+i2] // Function to generate.
-					st := util.Stack{}    // Stack for definition scopes.
-					ls := util.Stack{}    // Label stack for break/continue.
-					st.Push(&ir.Global)
+					wr := util.NewWriter() // Create output handler.
+					rf := regFile          // Copy register file.
+					f := ir.Funcs.F[i+i2]  // Function to generate.
+					ls := util.Stack{}     // Label stack for break/continue.
 					st.Push(&(f.Locals))
-					if err := genFunction(f.Node, &w, &st, &ls, &rf); err != nil {
+					if err := genFunction(f.Node, &wr, &st, &ls, &rf); err != nil {
 						errs.mx.Lock()
 						errs.err = append(errs.err, err)
 						errs.mx.Unlock()
@@ -408,13 +409,12 @@ func GenRiscv(opt util.Options) error {
 
 					// Deallocate stack. Can be omitted?
 					st.Pop()
-					st.Pop()
 
 					// Burst write function assembly to output and close writer.
-					w.Flush()
-					w.Close()
+					wr.Close()
 				}
-			}(i1, m, &wg)
+				st.Pop()
+			}(i, m, &wg)
 		}
 
 		// Check for errors.
@@ -423,25 +423,25 @@ func GenRiscv(opt util.Options) error {
 		}
 	} else {
 		// Sequential.
-		st := util.Stack{}    // Stack for definition scopes.
-		ls := util.Stack{}    // Label stack for continue statements.
-		st.Push(&ir.Global)   // Push global symbol table on stack.
-		w := util.NewWriter() // Create output handler.
-		rf := regFile         // Copy register file.
+		st := util.Stack{}     // Stack for definition scopes.
+		ls := util.Stack{}     // Label stack for continue statements.
+		st.Push(&ir.Global)    // Push global symbol table on stack.
+		wr := util.NewWriter() // Create output handler.
+		rf := regFile          // Copy register file.
 		for _, e1 := range ir.Funcs.F {
 			st.Push(&(e1.Locals))
-			if err := genFunction(e1.Node, &w, &st, &ls, &rf); err != nil {
+			if err := genFunction(e1.Node, &wr, &st, &ls, &rf); err != nil {
 				return err
 			}
 			st.Pop()
 
 			// Burst write function assembly to output.
-			w.Flush()
+			wr.Flush()
 		}
 		st.Pop()
 
 		// Close writer.
-		w.Close()
+		wr.Close()
 	}
 	// Global data and constants go below .text section.
 
@@ -480,9 +480,8 @@ func GenRiscv(opt util.Options) error {
 	// Wait for worker threads to finish, if any.
 	wg.Wait()
 
-	wr.Flush()
+	// Write globals to output.
 	wr.Close()
-
 	return nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,8 +27,9 @@ type Writer struct {
 // ----- Constants -----
 // ---------------------
 
-var wc chan string // Write channel used for receiving data from worker threads.
-var cc chan error  // Close channel used by main thread to signal to end write operations.
+var wc chan string     // Write channel used for receiving data from worker threads.
+var cc chan error      // Close channel used by main thread to signal to end write operations.
+var wg *sync.WaitGroup // used for synchronising when I/O finished writing to output.
 
 // ---------------------
 // ----- Functions -----
@@ -36,6 +38,11 @@ var cc chan error  // Close channel used by main thread to signal to end write o
 // Write writes a format string to the Writer's buffer.
 func (w *Writer) Write(format string, args ...interface{}) {
 	w.sb.WriteString(fmt.Sprintf(format, args...))
+}
+
+// WriteString writes a plain string to the Writer's buffer.
+func (w *Writer) WriteString(s string) {
+	w.sb.WriteString(s)
 }
 
 // Ins1 writes a one-line instruction using the operator and single operand.
@@ -80,11 +87,13 @@ func (w *Writer) Flush() {
 func (w *Writer) Close() {
 	w.Flush()
 	w.c = nil
+	wg.Done()
 }
 
 // NewWriter returns a new Writer to be used by worker threads to write strings concurrently to the output buffer.
 // Must not be called before main thread has called ListenWrite.
 func NewWriter() Writer {
+	wg.Add(1)
 	return Writer{
 		sb: strings.Builder{},
 		c:  wc,
@@ -131,8 +140,14 @@ func ReadSource(opt Options) (string, error) {
 // ListenWrite listens for worker thread outputs. The received data is written to either file
 // if File pointer f is not nil or stdout if File pointer f is nil. The function loops until
 // a termination signal is sent using the Close function.
-func ListenWrite(t int, f *os.File) {
-	wc = make(chan string, t)
+func ListenWrite(opt Options, f *os.File, wgg *sync.WaitGroup) {
+	wg = wgg
+	if opt.Threads > 1 && !opt.LLVM && !opt.TokenStream {
+		// LLVM IR can't be output in parallel, because enumeration happens when called on module.
+		wc = make(chan string, opt.Threads+1)
+	} else {
+		wc = make(chan string, 1)
+	}
 	cc = make(chan error, 1) // Make buffered to catch Close before listener is invoked.
 	var w *bufio.Writer
 	if f != nil {

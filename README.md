@@ -12,7 +12,7 @@ compiler the project examines *functional level parallelism* and other features 
 code generation of the Go programming language.
 
 **If you are looking for how to use the compiler please see
-[USAGE.md](USAGE.md).**
+[USAGE.md](doc/USAGE.md).**
 
 ## Very Simple Language
 
@@ -78,7 +78,7 @@ begin
 end
 ```
 
-More on VSL type compatibility and assignment in [types.md](types.md).
+More on VSL type compatibility and assignment in [types.md](doc/types.md).
 
 ## Go features
 

@@ -46,7 +46,7 @@ func ParseArgs() (Options, error) {
 		return opt, nil
 	}
 	args := os.Args[1:]
-	for i1 := 0; i1 < len(args); i1++ {
+	for i1 := 0; i1 < len(args)-1; i1++ {
 		switch args[i1] {
 		case "-h", "--h", "-help", "--help":
 			// Help and usage.
@@ -54,8 +54,8 @@ func ParseArgs() (Options, error) {
 			os.Exit(0)
 		case "-ll":
 			// Use LLVM IR and LLVM code generator.
-			opt.LLVM = true;
-		case "-o", "-s", "-t":
+			opt.LLVM = true
+		case "-o", "-t":
 			if i1+1 >= len(args) {
 				return opt, fmt.Errorf("got flag %s but no argument", args[i1])
 			}
@@ -66,9 +66,6 @@ func ParseArgs() (Options, error) {
 			case "-o":
 				// Output file.
 				opt.Out = args[i1+1]
-			case "-s":
-				// Source file.
-				opt.Src = args[i1+1]
 			case "-t":
 				// Thread count.
 				if t, err := strconv.Atoi(args[i1+1]); err == nil {
@@ -110,9 +107,13 @@ func ParseArgs() (Options, error) {
 			os.Exit(0)
 		case "-vb":
 			// Verbose mode.
+			opt.Verbose = true
 		default:
 			return opt, fmt.Errorf("unexpected flag: %s", args[i1])
 		}
+	}
+	if len(args) > 0 {
+		opt.Src = args[len(args)-1]
 	}
 	return opt, nil
 }
@@ -124,8 +125,7 @@ func printHelp() {
 	_, _ = fmt.Fprintln(w, "--h, --help")
 	_, _ = fmt.Fprintln(w, "-ll\tUse LLVM to optimise and generate output code.")
 	_, _ = fmt.Fprintln(w, "-o\tPath and name of the output file.")
-	_, _ = fmt.Fprintln(w, "-s\tPath to source VSL file.")
-	_, _ = fmt.Fprintln(w, "-t\tNumber of threads to run in parallel. Must be in range [1, %d].", maxThreads)
+	_, _ = fmt.Fprintf(w, "-t\tNumber of threads to run in parallel. Must be in range [1, %d].\n", maxThreads)
 	_, _ = fmt.Fprintln(w, "-target\tOutput architecture type. Can be either 'Aarch64', 'Riscv32' or 'Riscv64'. Defaults to 'Aarch64'.")
 	_, _ = fmt.Fprintln(w, "-ts\tOutput the tokens of the source code and exit.")
 	_, _ = fmt.Fprintln(w, "-v, -version\tPrints application version and exits the application.")

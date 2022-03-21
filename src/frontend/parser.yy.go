@@ -565,385 +565,385 @@ yydefault:
 
 	case 1:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:40
+		//line frontend/parser-typed.y:40
 		{
 			ir.Root = nodeInit(ir.PROGRAM, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1]).node
 		}
 	case 2:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:42
+		//line frontend/parser-typed.y:42
 		{
 			yyVAL = nodeInit(ir.GLOBAL_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 3:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line frontend/parser-typed.y:43
+		//line frontend/parser-typed.y:43
 		{
 			yyVAL = nodeInit(ir.GLOBAL_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[2])
 		}
 	case 4:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:45
+		//line frontend/parser-typed.y:45
 		{
 			yyVAL = nodeInit(ir.GLOBAL, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 5:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:46
+		//line frontend/parser-typed.y:46
 		{
 			yyVAL = nodeInit(ir.GLOBAL, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 6:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:48
+		//line frontend/parser-typed.y:48
 		{
 			yyVAL = nodeInit(ir.STATEMENT_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 7:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line frontend/parser-typed.y:49
+		//line frontend/parser-typed.y:49
 		{
 			yyVAL = nodeInit(ir.STATEMENT_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[2])
 		}
 	case 8:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:51
+		//line frontend/parser-typed.y:51
 		{
 			yyVAL = nodeInit(ir.PRINT_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 9:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:52
+		//line frontend/parser-typed.y:52
 		{
 			yyVAL = nodeInit(ir.PRINT_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 10:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:54
+		//line frontend/parser-typed.y:54
 		{
 			yyVAL = nodeInit(ir.EXPRESSION_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 11:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:55
+		//line frontend/parser-typed.y:55
 		{
 			yyVAL = nodeInit(ir.EXPRESSION_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 12:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line frontend/parser-typed.y:57
+		//line frontend/parser-typed.y:57
 		{
 			yyVAL = nodeInit(ir.TYPED_VARIABLE_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[2], yyDollar[1])
 		}
 	case 13:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:59
+		//line frontend/parser-typed.y:59
 		{
 			yyVAL = nodeInit(ir.VARIABLE_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 14:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:60
+		//line frontend/parser-typed.y:60
 		{
 			yyVAL = nodeInit(ir.VARIABLE_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 15:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:62
+		//line frontend/parser-typed.y:62
 		{
 			yyVAL = nodeInit(ir.ARGUMENT_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 16:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line frontend/parser-typed.y:63
+		//line frontend/parser-typed.y:63
 		{
 			yyVAL = nodeInit(ir.PARAMETER_LIST, nil, 0, 0)
 		}
 	case 17:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:65
+		//line frontend/parser-typed.y:65
 		{
 			yyVAL = nodeInit(ir.PARAMETER_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 18:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:66
+		//line frontend/parser-typed.y:66
 		{
 			yyVAL = nodeInit(ir.PARAMETER_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 19:
 		yyDollar = yyS[yypt-0 : yypt+1]
-//line frontend/parser-typed.y:67
+		//line frontend/parser-typed.y:67
 		{
 			yyVAL = nodeInit(ir.PARAMETER_LIST, nil, 0, 0)
 		}
 	case 20:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:69
+		//line frontend/parser-typed.y:69
 		{
 			yyVAL = nodeInit(ir.DECLARATION_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 21:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line frontend/parser-typed.y:70
+		//line frontend/parser-typed.y:70
 		{
 			yyVAL = nodeInit(ir.DECLARATION_LIST, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[2])
 		}
 	case 22:
 		yyDollar = yyS[yypt-7 : yypt+1]
-//line frontend/parser-typed.y:72
+		//line frontend/parser-typed.y:72
 		{
 			yyVAL = nodeInit(ir.FUNCTION, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[2], yyDollar[6], yyDollar[4], yyDollar[7])
 		}
 	case 23:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:74
+		//line frontend/parser-typed.y:74
 		{
 			yyVAL = nodeInit(ir.STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 24:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:75
+		//line frontend/parser-typed.y:75
 		{
 			yyVAL = nodeInit(ir.STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 25:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:76
+		//line frontend/parser-typed.y:76
 		{
 			yyVAL = nodeInit(ir.STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 26:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:77
+		//line frontend/parser-typed.y:77
 		{
 			yyVAL = nodeInit(ir.STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 27:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:78
+		//line frontend/parser-typed.y:78
 		{
 			yyVAL = nodeInit(ir.STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 28:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:79
+		//line frontend/parser-typed.y:79
 		{
 			yyVAL = nodeInit(ir.STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 29:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:80
+		//line frontend/parser-typed.y:80
 		{
 			yyVAL = nodeInit(ir.STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 30:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line frontend/parser-typed.y:82
+		//line frontend/parser-typed.y:82
 		{
 			yyVAL = nodeInit(ir.BLOCK, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[2], yyDollar[3])
 		}
 	case 31:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:83
+		//line frontend/parser-typed.y:83
 		{
 			yyVAL = nodeInit(ir.BLOCK, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[2])
 		}
 	case 32:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:85
+		//line frontend/parser-typed.y:85
 		{
 			yyVAL = nodeInit(ir.ASSIGNMENT_STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 33:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line frontend/parser-typed.y:87
+		//line frontend/parser-typed.y:87
 		{
 			yyVAL = nodeInit(ir.RETURN_STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[2])
 		}
 	case 34:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line frontend/parser-typed.y:89
+		//line frontend/parser-typed.y:89
 		{
 			yyVAL = nodeInit(ir.PRINT_STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[2])
 		}
 	case 35:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:91
+		//line frontend/parser-typed.y:91
 		{
 			yyVAL = nodeInit(ir.NULL_STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos)
 		}
 	case 36:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line frontend/parser-typed.y:93
+		//line frontend/parser-typed.y:93
 		{
 			yyVAL = nodeInit(ir.IF_STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[2], yyDollar[4])
 		}
 	case 37:
 		yyDollar = yyS[yypt-6 : yypt+1]
-//line frontend/parser-typed.y:94
+		//line frontend/parser-typed.y:94
 		{
 			yyVAL = nodeInit(ir.IF_STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[2], yyDollar[4], yyDollar[6])
 		}
 	case 38:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line frontend/parser-typed.y:96
+		//line frontend/parser-typed.y:96
 		{
 			yyVAL = nodeInit(ir.WHILE_STATEMENT, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[2], yyDollar[4])
 		}
 	case 39:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:98
+		//line frontend/parser-typed.y:98
 		{
 			yyVAL = nodeInit(ir.RELATION, "=", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 40:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:99
+		//line frontend/parser-typed.y:99
 		{
 			yyVAL = nodeInit(ir.RELATION, "<", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 41:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:100
+		//line frontend/parser-typed.y:100
 		{
 			yyVAL = nodeInit(ir.RELATION, ">", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 42:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:102
+		//line frontend/parser-typed.y:102
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, "+", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 43:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:103
+		//line frontend/parser-typed.y:103
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, "-", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 44:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:104
+		//line frontend/parser-typed.y:104
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, "*", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 45:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:105
+		//line frontend/parser-typed.y:105
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, "/", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 46:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:106
+		//line frontend/parser-typed.y:106
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, "|", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 47:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:107
+		//line frontend/parser-typed.y:107
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, "^", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 48:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:108
+		//line frontend/parser-typed.y:108
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, "&", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 49:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:109
+		//line frontend/parser-typed.y:109
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, "<<", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 50:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:110
+		//line frontend/parser-typed.y:110
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, ">>", yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 51:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line frontend/parser-typed.y:111
+		//line frontend/parser-typed.y:111
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, "-", yyDollar[1].line, yyDollar[1].pos, yyDollar[2])
 		}
 	case 52:
 		yyDollar = yyS[yypt-2 : yypt+1]
-//line frontend/parser-typed.y:112
+		//line frontend/parser-typed.y:112
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, "~", yyDollar[1].line, yyDollar[1].pos, yyDollar[2])
 		}
 	case 53:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:113
+		//line frontend/parser-typed.y:113
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, nil, yyDollar[2].line, yyDollar[2].pos, yyDollar[2])
 		}
 	case 54:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:114
+		//line frontend/parser-typed.y:114
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 55:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:115
+		//line frontend/parser-typed.y:115
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 56:
 		yyDollar = yyS[yypt-4 : yypt+1]
-//line frontend/parser-typed.y:116
+		//line frontend/parser-typed.y:116
 		{
 			yyVAL = nodeInit(ir.EXPRESSION, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1], yyDollar[3])
 		}
 	case 57:
 		yyDollar = yyS[yypt-3 : yypt+1]
-//line frontend/parser-typed.y:118
+		//line frontend/parser-typed.y:118
 		{
 			yyVAL = nodeInit(ir.DECLARATION, nil, yyDollar[2].line, yyDollar[2].pos, yyDollar[3], yyDollar[2])
 		}
 	case 58:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:120
+		//line frontend/parser-typed.y:120
 		{
 			yyVAL = nodeInit(ir.PRINT_ITEM, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 59:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:121
+		//line frontend/parser-typed.y:121
 		{
 			yyVAL = nodeInit(ir.PRINT_ITEM, nil, yyDollar[1].line, yyDollar[1].pos, yyDollar[1])
 		}
 	case 60:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:123
+		//line frontend/parser-typed.y:123
 		{
 			yyVAL = nodeInit(ir.IDENTIFIER_DATA, yyDollar[1].val, yyDollar[1].line, yyDollar[1].pos)
 		}
 	case 61:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:125
+		//line frontend/parser-typed.y:125
 		{
 			yyVAL = nodeInit(ir.INTEGER_DATA, yyDollar[1].val, yyDollar[1].line, yyDollar[1].pos)
 		}
 	case 62:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:126
+		//line frontend/parser-typed.y:126
 		{
 			yyVAL = nodeInit(ir.FLOAT_DATA, yyDollar[1].val, yyDollar[1].line, yyDollar[1].pos)
 		}
 	case 63:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:128
+		//line frontend/parser-typed.y:128
 		{
 			yyVAL = nodeInit(ir.STRING_DATA, yyDollar[1].val, yyDollar[1].line, yyDollar[1].pos)
 		}
 	case 64:
 		yyDollar = yyS[yypt-1 : yypt+1]
-//line frontend/parser-typed.y:130
+		//line frontend/parser-typed.y:130
 		{
 			yyVAL = nodeInit(ir.TYPE_DATA, yyDollar[1].val, yyDollar[1].line, yyDollar[1].pos)
 		}

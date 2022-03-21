@@ -5,41 +5,35 @@ package main
 import (
 	"fmt"
 	"os"
+	"sync"
+	"time"
 	"vslc/src/backend"
 	"vslc/src/frontend"
 	"vslc/src/ir"
-	"vslc/src/ir/llvm"
+	ll2 "vslc/src/ir/llvm"
 	"vslc/src/util"
 )
 
-func main() {
-	// Parse command line arguments.
-	opt, err := util.ParseArgs()
-	if err != nil {
-		fmt.Printf("Command line argument error: %s\n", err)
-		os.Exit(1)
-	}
-
+// run begins reading source code and executes compiler stages.
+// Behaviour is defined by the util.Options structure.
+func run(opt util.Options) error {
 	// Read source code.
 	src, err := util.ReadSource(opt)
 	if err != nil {
-		fmt.Printf("Could not read source code: %s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("could not read source code: %s\n", err)
 	}
 
 	// If -ts flag was passed: output token stream and exit.
 	if opt.TokenStream {
 		if err := frontend.TokenStream(src); err != nil {
-			fmt.Printf("Syntax error: %s\n", err)
-			os.Exit(1)
+			return fmt.Errorf("syntax error: %s\n", err)
 		}
-		os.Exit(0)
+		return nil
 	}
 
 	// Generate syntax tree by lexing and parsing source code.
 	if err := frontend.Parse(src); err != nil {
-		fmt.Printf("Parse error: %s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("parse error: %s\n", err)
 	}
 
 	// Optimise syntax tree.
@@ -50,36 +44,54 @@ func main() {
 				fmt.Println(e1)
 			}
 		}
-		fmt.Printf("Syntax tree error: %s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("syntax tree error: %s\n", err)
 	}
 
-	if opt.LLVM {
-		defer func(){
-			if r := recover(); r != nil {
-				fmt.Println(r) // TODO: delete.
-			}
-		}()
-		if err := llvm.GenLLVM(opt, ir.Root); err != nil {
-			fmt.Printf("Error reported by LLVM: %s", err)
-			os.Exit(1)
-		}
-		os.Exit(0)
+	// TODO: Delete.
+	if opt.Verbose {
+		ir.Root.Print(0, true)
 	}
+
+	// Gen LLVM and exit, if flag is passed.
+	if opt.LLVM {
+		//if err = llvm.GenLLVM(opt, ir.Root); err != nil {
+		//	return fmt.Errorf("error reported by LLVM: %s", err)
+		//}
+		if err = ll2.GenLLVM(opt, ir.Root); err != nil {
+			return fmt.Errorf("error reported by LLVM: %s", err)
+		}
+		return nil
+	}
+
+	// Generate output assembler manually.
 
 	// Generate symbol table using my implementation.
-	if err := ir.GenerateSymTab(opt); err != nil {
-		fmt.Printf("Source code error: %s\n", err)
-		os.Exit(1)
+	if err = ir.GenerateSymTab(opt); err != nil {
+		return err
 	}
 
 	// Validate source code.
-	if err := ir.ValidateTree(opt); err != nil {
-		fmt.Printf("Source code error: %s", err)
+	if err = ir.ValidateTree(opt); err != nil {
+		return err
+	}
+
+	// Generate assembler.
+	if err = backend.GenerateAssembler(opt); err != nil {
+		return fmt.Errorf("code generation error: %s\n", err)
+	}
+	return nil
+}
+
+func main() {
+	// Parse command line arguments.
+	opt, err := util.ParseArgs()
+	if err != nil {
+		fmt.Printf("Command line argument error: %s\n", err)
 		os.Exit(1)
 	}
 
 	// Initiate output writer.
+	wg := sync.WaitGroup{}
 	if len(opt.Out) > 0 {
 		// Attempt to open output file. Create new file if necessary.
 		if f, err := os.OpenFile(opt.Out, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err != nil {
@@ -87,26 +99,24 @@ func main() {
 				err := f.Close()
 				if err != nil {
 					fmt.Println(err)
-					os.Exit(1)
 				}
 			}(f)
-			util.ListenWrite(opt.Threads, f)
+			util.ListenWrite(opt, f, &wg)
 		} else {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 	} else {
 		// Write results to stdout.
-		util.ListenWrite(opt.Threads, nil)
+		util.ListenWrite(opt, nil, &wg)
+	}
+	defer util.Close()
+
+	if err := run(opt); err != nil {
+		fmt.Printf("Error: %s", err)
 	}
 
-	// Generate assembler.
-	if err := backend.GenerateAssembler(opt); err != nil {
-		fmt.Printf("Code generation error: %s\n", err)
-		util.Close()
-		os.Exit(1)
-	}
-
-	// Stop the output writer.
-	util.Close()
+	// Wait for code generation to complete.
+	wg.Wait()               // TODO: Make this such that it works.
+	time.Sleep(time.Second) // TODO: Delete.
 }

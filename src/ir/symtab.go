@@ -136,8 +136,8 @@ func GenerateSymTab(opt util.Options) error {
 		ts := sync.WaitGroup{} // Used for synchronising worker threads before doing recursive binding.
 
 		// Initiate worker threads.
-		t := opt.Threads                    // Max number of threads to initiate.
-		l := len(Root.Children[0].Children) // Number of functions defined in program.
+		t := opt.Threads        // Max number of threads to initiate.
+		l := len(Root.Children) // Number of functions defined in program.
 		if t > l {
 			t = l // Cannot launch more threads than functions.
 		}
@@ -147,10 +147,10 @@ func GenerateSymTab(opt util.Options) error {
 		// Allocate memory for errors; one per worker thread.
 		errs.err = make([]error, 0, t)
 
-		// TODO: make such that MAIN thread handles first function.
 		// Launch t threads.
 		for i1 := 0; i1 < l; i1 += n {
 			m := n
+			i := i1
 			if i1 < res {
 				// Indicate that this worker thread should do one more job.
 				m++
@@ -163,7 +163,7 @@ func GenerateSymTab(opt util.Options) error {
 				// Bind function to global symbol table.
 				ts.Add(1)
 				for i2 := 0; i2 < j; i2++ {
-					if err := Root.Children[0].Children[i+i2].bindGlobal(opt); err != nil {
+					if err := Root.Children[i+i2].bindGlobal(opt); err != nil {
 						errs.mx.Lock()
 						errs.err = append(errs.err, err)
 						errs.mx.Unlock()
@@ -171,28 +171,31 @@ func GenerateSymTab(opt util.Options) error {
 				}
 				ts.Done()
 
+				// TODO: KAN IKKE GJØRE SLIK. Se llvm transform for fasit.
 				// Wait for other worker threads to finish adding functions to global symbol table.
 				ts.Wait()
 
 				// Bind function's local variables.
+				st := util.Stack{}
+				st.Push(&Global) // Let global scope live for the duration of all functions.
 				for i2 := 0; i2 < j; i2++ {
-					if Root.Children[0].Children[i+i2].Typ != FUNCTION {
+					if Root.Children[i+i2].Typ != FUNCTION {
 						continue
 					}
-					f := Root.Children[0].Children[i+i2]
-					st := util.Stack{}
-					st.Push(&Global)
-					st.Push(&f.Entry.Locals)
-					f.Children[2].Entry = f.Entry // Link FUNCTION body BLOCK to symbol table entry of function.
-					for _, e1 := range f.Children[2].Children {
+					f := Root.Children[i+i2]
+					st.Push(&f.Entry.Locals) // Push function's scope to stack.
+					//f.Children[3].Entry = f.Entry // Link FUNCTION body BLOCK to symbol table entry of function.
+					for _, e1 := range f.Children[3].Children {
 						if err := e1.bind(&st, f.Entry); err != nil {
 							errs.mx.Lock()
 							errs.err = append(errs.err, err)
 							errs.mx.Unlock()
 						}
 					}
+					st.Pop() // Pop function's scope from stack.
 				}
-			}(i1, m, &wg, &ts)
+				st.Pop() // Pop global scope from stack.
+			}(i, m, &wg, &ts)
 		}
 
 		// Wait for worker threads to finish.
@@ -204,7 +207,7 @@ func GenerateSymTab(opt util.Options) error {
 		}
 	} else {
 		// Sequential.
-		for _, e1 := range Root.Children[0].Children {
+		for _, e1 := range Root.Children {
 			if err := e1.bindGlobal(opt); err != nil {
 				return err
 			}
@@ -317,11 +320,6 @@ func (n *Node) bindGlobal(opt util.Options) error {
 
 		// Add function to global list of functions.
 		Funcs.mx.Lock()
-		if s.Seq >= len(Funcs.F) {
-			tmp := Funcs.F
-			Funcs.F = make([]*Symbol, len(tmp)<<1) // Double the capacity of function slice.
-			copy(Funcs.F, tmp)
-		}
 		Funcs.F = append(Funcs.F, &s)
 		Funcs.mx.Unlock()
 	case DECLARATION:
@@ -428,6 +426,12 @@ func (n *Node) bind(st *util.Stack, f *Symbol) error {
 		}
 		n.Entry = &s // Save local scope symbol table to node. We can use it later when needed.
 		st.Push(&(s.Locals))
+		for _, e1 := range n.Children {
+			if err := e1.bind(st, f); err != nil {
+				return err
+			}
+		}
+		st.Pop()
 	case STRING_DATA:
 		// Take string data from node and put it in global string table.
 		// Replace STRING_DATA node's data with the index of string in string table.
@@ -436,12 +440,12 @@ func (n *Node) bind(st *util.Stack, f *Symbol) error {
 		// Take the float data from node and put it in global float table.
 		// Replace node's data with the index of the float in the float table.
 		AddFloat(n)
-	}
-
-	// Recursively bind identifiers declared in children.
-	for _, e1 := range n.Children {
-		if err := e1.bind(st, f); err != nil {
-			return err
+	default:
+		// Recursively bind identifiers declared in children.
+		for _, e1 := range n.Children {
+			if err := e1.bind(st, f); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

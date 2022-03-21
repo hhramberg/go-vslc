@@ -43,6 +43,7 @@ func Optimise(opt util.Options) error {
 		// Launch t threads.
 		for i1 := 0; i1 < l; i1 += n {
 			m := n
+			i := i1
 			if i1 < res {
 				// Indicate that this worker thread should do one more job.
 				m++
@@ -58,7 +59,7 @@ func Optimise(opt util.Options) error {
 						errs.mx.Unlock()
 					}
 				}
-			}(i1, m, &wg)
+			}(i, m, &wg)
 		}
 
 		// Wait for worker threads to finish.
@@ -74,7 +75,9 @@ func Optimise(opt util.Options) error {
 			return err
 		}
 	}
-	Root.Print(0, true) // TODO: Delete.
+	// Remove GLOBAL_LIST.
+	Root.Children = Root.Children[0].Children
+
 	return nil
 }
 
@@ -102,11 +105,6 @@ func (n *Node) paraPrepare() {
 // optimise starts the recursive optimisation process. This function must not be called
 // by the parallel run form the root node.
 func (n *Node) optimise() error {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("got error on node: %s\n", n.String())
-		}
-	}()
 	// Traverse the subtree recursively.
 	for _, e1 := range n.Children {
 		if err := e1.optimise(); err != nil {
@@ -421,7 +419,7 @@ func (n *Node) constantFolding() error {
 			// Unary operators.
 			switch n.Data.(string) {
 			case "-":
-				data := -(n.Data.(int))
+				data := -(n.Children[0].Data.(int))
 				*n = *(n.Children[0])
 				n.Data = data
 			case "~":

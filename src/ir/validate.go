@@ -142,8 +142,8 @@ func ValidateTree(opt util.Options) error {
 		wg := sync.WaitGroup{} // Used for synchronising worker threads with main thread.
 
 		// Initiate worker threads.
-		t := opt.Threads                    // Max number of threads to initiate.
-		l := len(Root.Children[0].Children) // Number of functions defined in program.
+		t := opt.Threads  // Max number of threads to initiate.
+		l := len(Funcs.F) // Number of functions defined in program.
 		if t > l {
 			t = l // Cannot launch more threads than functions.
 		}
@@ -156,6 +156,7 @@ func ValidateTree(opt util.Options) error {
 		// Launch t threads.
 		for i1 := 0; i1 < l; i1 += n {
 			m := n
+			i := i1
 			if i1 < res {
 				// Indicate that this worker thread should do one more job.
 				m++
@@ -182,7 +183,7 @@ func ValidateTree(opt util.Options) error {
 					st.Pop()
 				}
 				st.Pop()
-			}(i1, m, &wg)
+			}(i, m, &wg)
 		}
 
 		// Wait for worker threads to finish.
@@ -190,6 +191,9 @@ func ValidateTree(opt util.Options) error {
 
 		// Check for errors.
 		if len(errs.err) > 0 {
+			for _, e1 := range errs.err {
+				fmt.Println(e1)
+			}
 			return errors.New("multiple errors during parallel validation")
 		}
 	} else {
@@ -237,6 +241,19 @@ func (n *Node) validate(st *util.Stack) error {
 		}
 		if n.Entry != nil {
 			st.Pop()
+		}
+	case STATEMENT_LIST:
+		for i1, e1 := range n.Children[:len(n.Children)-1] {
+			if e1.Typ == RETURN_STATEMENT && i1 != len(n.Children)-1 {
+				// Can't have statements after return.
+				return fmt.Errorf("line %d:%d: %s not allowed after %s",
+					n.Children[i1+1].Line, n.Children[i1+1].Pos, nt[n.Children[i1+1].Typ], nt[e1.Typ])
+			}
+		}
+		for _, e1 := range n.Children {
+			if err := e1.validate(st); err != nil {
+				return err
+			}
 		}
 	default:
 		for _, e1 := range n.Children {

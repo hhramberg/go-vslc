@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"vslc/src/ir"
+	"vslc/src/util"
 )
 
 // Parse parses the syntax tree from the source code.
@@ -39,19 +41,30 @@ func TokenStream(src string) error {
 	l := newLexer(src, lexGlobal)
 	go l.run()
 
+	wr := util.NewWriter()
+	defer wr.Close()
 	sb := strings.Builder{}
+	tw := tabwriter.NewWriter(&sb, 10, 20, 2, ' ', 0)
+	_, _ = fmt.Fprintf(tw, "Value\tType\tPosition\n")
 	for {
 		t := l.nextItem()
 		switch t.typ {
 		case itemEOF:
-			fmt.Println(sb.String())
-			return nil
+			var err error = nil
+			if err2 := tw.Flush(); err2 != nil {
+				err = err2
+			}
+			wr.WriteString(sb.String())
+			return err
 		case itemError:
-			fmt.Println(sb.String())
+			wr.WriteString(sb.String())
 			return errors.New(t.val)
 		default:
-			sb.WriteString(t.val)
-			sb.WriteRune('\n')
+			if len(t.val) > 20 {
+				_, _ = fmt.Fprintf(tw, "%.17q...\t%s\tline: %d:%d\n", t.val, yyTokname(int(t.typ)), t.line, t.pos)
+			} else {
+				_, _ = fmt.Fprintf(tw, "%q\t%s\tline: %d:%d\n", t.val, yyTokname(int(t.typ)), t.line, t.pos)
+			}
 		}
 	}
 }
