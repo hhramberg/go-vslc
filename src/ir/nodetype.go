@@ -92,7 +92,7 @@ var nt = [...]string{
 }
 
 // ----------------------
-// ----- Functions ------
+// ----- functions ------
 // ----------------------
 
 // String returns a print friendly string of Node n.

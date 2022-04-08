@@ -10,7 +10,7 @@ import (
 )
 
 // genPrint generates a print statement recursively. A error is returned if something went wrong.
-func genPrint(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *registerFile) error {
+func genPrint(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *RegisterFile) error {
 	wr.Write("; ----- Print statement begin -----\n") // TODO: delete.
 
 	for _, e1 := range n.Children[0].Children {

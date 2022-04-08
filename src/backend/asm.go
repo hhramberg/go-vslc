@@ -16,17 +16,17 @@ import (
 // ---------------------
 
 // -------------------
-// ----- Globals -----
+// ----- globals -----
 // -------------------
 
 // ---------------------
-// ----- Functions -----
+// ----- functions -----
 // ---------------------
 
 // GenerateAssembler takes the syntax tree and generates output assembler code
 // based on architecture defined by opt.
 func GenerateAssembler(opt util.Options) error {
-	switch opt.Target {
+	switch opt.TargetArch {
 	case util.Aarch64:
 		return arm.GenArm(opt)
 	case util.Riscv64:

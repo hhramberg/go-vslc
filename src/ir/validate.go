@@ -33,7 +33,7 @@ const (
 )
 
 // -------------------
-// ----- Globals -----
+// ----- globals -----
 // -------------------
 
 // lutExp is the lookup table for binary expressions, relations and type compatibility.
@@ -132,7 +132,7 @@ var lutAssign = [2][2]bool{
 }
 
 // ----------------------
-// ----- Functions ------
+// ----- functions ------
 // ----------------------
 
 // ValidateTree validates types for expressions and assignments.
@@ -151,7 +151,7 @@ func ValidateTree(opt util.Options) error {
 		res := l % t // Residual work for res first threads.
 
 		// Allocate memory for errors; one per worker thread.
-		errs.err = make([]error, 0, t)
+		errs := util.NewPerror(t)
 
 		// Launch t threads.
 		for i1 := 0; i1 < l; i1 += n {
@@ -174,9 +174,7 @@ func ValidateTree(opt util.Options) error {
 					f := Funcs.F[i+i2]
 					st.Push(&(f.Locals))
 					if err := f.Node.validate(&st); err != nil {
-						errs.mx.Lock()
-						errs.err = append(errs.err, err)
-						errs.mx.Unlock()
+						errs.Append(err)
 					}
 
 					// Deallocate stack. Can be omitted?
@@ -190,8 +188,8 @@ func ValidateTree(opt util.Options) error {
 		wg.Wait()
 
 		// Check for errors.
-		if len(errs.err) > 0 {
-			for _, e1 := range errs.err {
+		if errs.Len() > 0 {
+			for e1 := range errs.Errors() {
 				fmt.Println(e1)
 			}
 			return errors.New("multiple errors during parallel validation")
@@ -267,7 +265,7 @@ func (n *Node) validate(st *util.Stack) error {
 
 // validateExpression validates an expression and returns its resulting datatype.
 // If the expression is illegal, an error is returned.
-func (n *Node) validateExpression(st *util.Stack) (dataType, error) {
+func (n *Node) validateExpression(st *util.Stack) (int, error) {
 	if n.Data == nil {
 		// FUNCTION call.
 		name := n.Children[0].Data.(string)
@@ -279,7 +277,7 @@ func (n *Node) validateExpression(st *util.Stack) (dataType, error) {
 			}
 
 			if f.Nparams > 0 {
-				params := f.Node.Children[2].Children // Functions params: one or more typed variable list of indents.
+				params := f.Node.Children[2].Children // functions params: one or more typed variable list of indents.
 				seq := 0
 				for i1 := 0; i1 < len(params); i1++ {
 					// For all typed variable lists in parameter list.
@@ -295,11 +293,11 @@ func (n *Node) validateExpression(st *util.Stack) (dataType, error) {
 							} else {
 								if t != param.Entry.DataTyp {
 									return 0, fmt.Errorf("function %q parameter %d expects %s, got %s at line %d:%d",
-										f.Name, seq+1, dTyp[param.Entry.DataTyp], dTyp[t], n.Children[0].Line, n.Children[0].Pos)
+										f.Name, seq+1, DTyp[param.Entry.DataTyp], DTyp[t], n.Children[0].Line, n.Children[0].Pos)
 								}
 							}
 						case IDENTIFIER_DATA:
-							var dt dataType
+							var dt int
 							if e, err := GetEntry(arg.Data.(string), st); err == nil {
 								dt = e.DataTyp
 							} else {
@@ -308,17 +306,17 @@ func (n *Node) validateExpression(st *util.Stack) (dataType, error) {
 							}
 							if param.Entry.DataTyp != dt {
 								return 0, fmt.Errorf("function %q parameter %d expects %s, got %s at line %d:%d",
-									f.Name, seq+1, dTyp[param.Entry.DataTyp], dTyp[arg.Entry.DataTyp], n.Children[0].Line, n.Children[0].Pos)
+									f.Name, seq+1, DTyp[param.Entry.DataTyp], DTyp[arg.Entry.DataTyp], n.Children[0].Line, n.Children[0].Pos)
 							}
 						case INTEGER_DATA:
 							if param.Entry.DataTyp != DataInteger {
 								return 0, fmt.Errorf("function %q parameter %d expects %s, got %s at line %d:%d",
-									f.Name, seq+1, dTyp[param.Entry.DataTyp], dTyp[DataInteger], n.Children[0].Line, n.Children[0].Pos)
+									f.Name, seq+1, DTyp[param.Entry.DataTyp], DTyp[DataInteger], n.Children[0].Line, n.Children[0].Pos)
 							}
 						case FLOAT_DATA:
 							if param.Entry.DataTyp != DataFloat {
 								return 0, fmt.Errorf("function %q parameter %d expects %s, got %s at line %d:%d",
-									f.Name, seq+1, dTyp[param.Entry.DataTyp], dTyp[DataFloat], n.Children[0].Line, n.Children[0].Pos)
+									f.Name, seq+1, DTyp[param.Entry.DataTyp], DTyp[DataFloat], n.Children[0].Line, n.Children[0].Pos)
 							}
 						default:
 							return 0, fmt.Errorf("unexpected node type in function call: %s", nt[arg.Typ])
@@ -338,7 +336,7 @@ func (n *Node) validateExpression(st *util.Stack) (dataType, error) {
 	case 2:
 		c0 := n.Children[0]
 		c1 := n.Children[1]
-		var c0t, c1t dataType
+		var c0t, c1t int
 
 		// Set operand 1 type.
 		switch c0.Typ {
@@ -411,7 +409,7 @@ func (n *Node) validateExpression(st *util.Stack) (dataType, error) {
 		// Use lookup table to quickly determine compatibility.
 		if !lutExp[c0t][c1t][op] {
 			return 0, fmt.Errorf("illegal expression: %s %s %s on line %d:%d",
-				dTyp[c0t], n.Data.(string), dTyp[c1t], n.Line, n.Pos)
+				DTyp[c0t], n.Data.(string), DTyp[c1t], n.Line, n.Pos)
 		}
 
 		// Set result data type and return.
@@ -427,7 +425,7 @@ func (n *Node) validateExpression(st *util.Stack) (dataType, error) {
 		if c0.Typ == FLOAT_DATA {
 			if n.Data.(string) != "-" {
 				return 0, fmt.Errorf("unary operator %s not deifned for data type %s",
-					n.Data.(string), dTyp[DataFloat])
+					n.Data.(string), DTyp[DataFloat])
 			}
 			return DataFloat, nil
 		}
@@ -438,7 +436,7 @@ func (n *Node) validateExpression(st *util.Stack) (dataType, error) {
 
 // validateRelation validates a relation. If the relation is illegal, an error is returned.
 func (n *Node) validateRelation(st *util.Stack) error {
-	var dt1, dt2 dataType
+	var dt1, dt2 int
 	c1 := n.Children[0]
 	c2 := n.Children[1]
 	switch c1.Typ {
@@ -495,7 +493,7 @@ func (n *Node) validateRelation(st *util.Stack) error {
 
 	if !lutExp[dt1][dt2][op] {
 		return fmt.Errorf("operator %s not defined for %s and %s at line %d:%d",
-			n.Data.(string), dTyp[dt1], dTyp[dt2], c1.Line, c1.Pos)
+			n.Data.(string), DTyp[dt1], DTyp[dt2], c1.Line, c1.Pos)
 	}
 	return nil
 }
@@ -504,7 +502,7 @@ func (n *Node) validateRelation(st *util.Stack) error {
 func (n *Node) validateAssign(st *util.Stack) error {
 	c1 := n.Children[0]
 	c2 := n.Children[1]
-	var c1t, c2t dataType
+	var c1t, c2t int
 
 	if s, err := GetEntry(c1.Data.(string), st); err == nil {
 		c1t = s.DataTyp
@@ -535,7 +533,7 @@ func (n *Node) validateAssign(st *util.Stack) error {
 
 	if !lutAssign[c1t][c2t] {
 		return fmt.Errorf("cannot assign %s to variable %q, %s is not assignlable to %s at line %d:%d",
-			dTyp[c2t], c1.Data.(string), dTyp[c2t], dTyp[c1t], c1.Line, c1.Pos)
+			DTyp[c2t], c1.Data.(string), DTyp[c2t], DTyp[c1t], c1.Line, c1.Pos)
 	}
 	return nil
 }

@@ -37,7 +37,7 @@ type symTab struct {
 const mapSize = 16 // Predefined size for a decently sized symbol table hash table.
 
 // -------------------
-// ----- Globals -----
+// ----- globals -----
 // -------------------
 
 var stringPrefix = "L_STR" // Prefix all global strings with this prefix.
@@ -56,10 +56,8 @@ var reservedFunctionNames = []string{
 }
 
 // ---------------------
-// ----- Functions -----
+// ----- functions -----
 // ---------------------
-
-// TODO: Implement Dispose() on required cpp-classes.
 
 // GenLLVM generates LLVM IR from the root ast.Node of the syntax tree.
 func GenLLVM(opt util.Options, root *ast.Node) error {
@@ -70,7 +68,7 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 		return errors.New("syntax tree node has no children")
 	}
 
-	if opt.Target == util.Riscv32 {
+	if opt.TargetArch == util.Riscv32 {
 		i = llvm.Int32Type()
 		f = llvm.FloatType()
 	}
@@ -83,12 +81,15 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 
 	globals.m = make(map[string]llvm.Value, mapSize)
 	ctx := llvm.NewContext()
+	defer ctx.Dispose()
 
 	// Builder constructs LLVM IR instructions on basic block level.
 	b := ctx.NewBuilder()
+	defer b.Dispose()
 
 	// Set module name equal file name without file extension.
-	m := ctx.NewModule(strings.TrimSuffix(filepath.Base(opt.Src), filepath.Ext(opt.Src)))
+	m := ctx.NewModule(filepath.Base(opt.Src))
+	defer m.Dispose()
 
 	if opt.Threads > 1 {
 		// Parallel.
@@ -109,7 +110,6 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 		cerr := make(chan error, t) // One buffer per worker thread.
 		errs := make([]error, 0, l) // Pre-allocate one error per global definition.
 
-		// TODO: Consider making this a common utility in "vslc/util".
 		// Error listener.
 		go func(cerr chan error, errs *[]error) {
 			defer close(cerr)
@@ -133,19 +133,18 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 				// This thread should do one extra residual job.
 				end++
 			}
-
 			go func(start, end int, cerr chan error, cfunc chan []funcWrapper, wg *sync.WaitGroup) {
 				defer wg.Done()
 				funcs := make([]funcWrapper, 0, end-start)
 				for _, e1 := range root.Children[start:end] {
 					if e1.Typ == ast.FUNCTION {
-						if fun, err := genFuncHeader(&m, e1); err != nil {
+						if fun, err := genFuncHeader(m, e1); err != nil {
 							cerr <- err
 						} else {
 							funcs = append(funcs, funcWrapper{ll: fun, node: e1})
 						}
 					} else if e1.Typ == ast.DECLARATION {
-						if err := genDeclarationGlobal(&m, e1); err != nil {
+						if err := genDeclarationGlobal(m, e1); err != nil {
 							cerr <- err
 						}
 					} else {
@@ -162,11 +161,12 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 
 		// Wait for generation of function declarations and global variables.
 		wg.Wait()
+		close(cfunc)
 		for e1 := range cfunc {
 			funcs = append(funcs, e1...)
 		}
 
-		// Stop errors listener.
+		// Stop error listener.
 		cerr <- nil
 
 		// Check for errors.
@@ -199,15 +199,19 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 				// This thread should do one extra residual job.
 				end++
 			}
+			// Give each thread its own builder, else there will be multiple threads writing different functions,
+			// interchanging basic blocks concurrently.
+			tb := ctx.NewBuilder()
 
-			go func(start, end int, wg *sync.WaitGroup, cerr chan error) {
+			go func(start, end int, b llvm.Builder, wg *sync.WaitGroup, cerr chan error) {
 				defer wg.Done()
+				defer b.Dispose()
 				for _, e1 := range funcs[start:end] {
-					if err := genFuncBody(&b, &m, &e1.ll, e1.node); err != nil {
+					if err := genFuncBody(b, m, e1.ll, e1.node); err != nil {
 						cerr <- err
 					}
 				}
-			}(start, end, &wg, cerr)
+			}(start, end, tb, &wg, cerr)
 
 			start = end
 			end += n
@@ -215,20 +219,19 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 
 		// Wait for generation of function bodies.
 		wg.Wait()
-
 	} else {
 		// Sequential.
 		funcs := make([]funcWrapper, 0, len(root.Children)) // Pre-allocate sufficient space for functions of root.
 		for _, e1 := range root.Children {
 			if e1.Typ == ast.FUNCTION {
-				if fun, err := genFuncHeader(&m, e1); err != nil {
+				if fun, err := genFuncHeader(m, e1); err != nil {
 					return err
 				} else {
 					funcs = append(funcs, funcWrapper{ll: fun, node: e1})
 				}
 			} else if e1.Typ == ast.DECLARATION {
 				// Global variable declaration.
-				if err := genDeclarationGlobal(&m, e1); err != nil {
+				if err := genDeclarationGlobal(m, e1); err != nil {
 					return err
 				}
 			} else {
@@ -236,7 +239,7 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 			}
 		}
 		for _, e1 := range funcs {
-			if err := genFuncBody(&b, &m, &(e1.ll), e1.node); err != nil {
+			if err := genFuncBody(b, m, e1.ll, e1.node); err != nil {
 				return err
 			}
 		}
@@ -245,7 +248,10 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 		return err
 	}
 
-	m.Dump()
+	if opt.Verbose {
+		fmt.Println("LLVM IR:")
+		m.Dump()
+	}
 
 	// Initialise LLVM code generation.
 	llvm.InitializeAllTargetInfos()
@@ -260,14 +266,26 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 	}
 
 	// Configure hardware properties for target.
-	cpu := "generic" // TODO: Make dynamic.
-	features := ""
+	var cpu string
+	switch opt.TargetArch {
+	case util.Riscv64:
+		cpu = "generic-rv64" // TODO: Causes LLVM to crash.
+	case util.Riscv32:
+		cpu = "generic-rv32"
+	default:
+		cpu = "generic"
+	}
+	features := "" // Ignore extra features for this simple compiler.
+
 	tm := t.CreateTargetMachine(tt, cpu, features,
 		llvm.CodeGenLevelNone,
 		llvm.RelocDefault,
 		llvm.CodeModelDefault)
+	defer tm.Dispose()
 
 	td := tm.CreateTargetData()
+	defer td.Dispose()
+
 	m.SetDataLayout(td.String())
 	m.SetTarget(tm.Triple())
 
@@ -280,28 +298,35 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 	ft := llvm.ObjectFile
 
 	// Compile target and store in memory.
-	buf, err := tm.EmitToMemoryBuffer(m, ft) // Panikk fordi noen IF-THEN-ELSE mangler return.
-	if err != nil {                          // TODO: Panikk her.
+	buf, err := tm.EmitToMemoryBuffer(m, ft)
+	if err != nil {
 		return err
 	} else if buf.IsNil() {
 		return errors.New("could not emit compiled code to memory")
 	}
 
 	// Open/create file and write compiled code to output file.
-	out := "/home/hhr/NTNU/Master/temp/vslc_out.o" // TODO: Make output dynamic.
+	var out string
+	if len(opt.Out) > 0 {
+		out = opt.Out
+	} else {
+		out = fmt.Sprintf("./%s.o", strings.TrimSuffix(filepath.Base(opt.Src), filepath.Ext(opt.Src)))
+	}
+
+	// Write to file sequentially.
 	if fd, err := os.OpenFile(out, os.O_CREATE|os.O_WRONLY, 0755); err != nil {
 		return err
 	} else {
+		defer func() {
+			if err := fd.Close(); err != nil {
+				fmt.Println(err)
+			}
+		}()
 		if _, err2 := fd.Write(buf.Bytes()); err2 != nil {
 			return err
 		}
 	}
 
-	// Cleanup C bindings memory allocations.
-	td.Dispose()
-	tm.Dispose()
-	m.Dispose()
-	ctx.Dispose()
 	return nil
 }
 
@@ -319,7 +344,7 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 //
 // bool		-	Set true if the sub-tree generated a RETURN statement which terminates the current basic block.
 // error	-	<nil> if everything went ok, error message if something went wrong.
-func gen(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st, ls *util.Stack) (bool, error) {
+func gen(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, st, ls *util.Stack) (bool, error) {
 	ret := false
 	var err error
 	switch n.Typ {
@@ -378,7 +403,7 @@ func gen(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st, ls *
 
 // genFuncHeader generates the LLVM IR declaration of a function. The declaration defines a function's name, parameters
 // and return type.
-func genFuncHeader(m *llvm.Module, n *ast.Node) (llvm.Value, error) {
+func genFuncHeader(m llvm.Module, n *ast.Node) (llvm.Value, error) {
 	if n.Typ != ast.FUNCTION {
 		return llvm.Value{}, fmt.Errorf("expected node type FUNCTION, got %s", n.String())
 	}
@@ -401,7 +426,7 @@ func genFuncHeader(m *llvm.Module, n *ast.Node) (llvm.Value, error) {
 
 	// Function's parameters.
 	atyp := make([]llvm.Type, 0, 8) // Assume no more than 8 parameters.
-	aname := make([]string, 0, 8)   // Assume no more then 8 parameters.
+	aname := make([]string, 0, 8)   // Assume no more than 8 parameters.
 	for _, e1 := range n.Children[2].Children {
 		// Typed variable list.
 		typ, err := genType(n.Children[1])
@@ -414,7 +439,7 @@ func genFuncHeader(m *llvm.Module, n *ast.Node) (llvm.Value, error) {
 			aname = append(aname, e2.Data.(string))
 		}
 	}
-	ftyp := llvm.FunctionType(ret, atyp, false)
+	ftyp := llvm.FunctionType(ret, atyp, false) // TODO: Sigseg during parallel.
 
 	// Use mutex for parallel thread safety.
 	globals.Lock()
@@ -429,7 +454,7 @@ func genFuncHeader(m *llvm.Module, n *ast.Node) (llvm.Value, error) {
 	}
 
 	// Declare function in module m.
-	fun := llvm.AddFunction(*m, name, ftyp)
+	fun := llvm.AddFunction(m, name, ftyp)
 
 	// Set parameter names.
 	for i1, e1 := range fun.Params() {
@@ -443,12 +468,12 @@ func genFuncHeader(m *llvm.Module, n *ast.Node) (llvm.Value, error) {
 
 // genFuncBody generates the LLVM IR definition fo a function. A function definition defines a function's executing
 // instructions that's run when the function is called.
-func genFuncBody(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node) error {
+func genFuncBody(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node) error {
 	st := util.Stack{} // Scope stack.
 	ls := util.Stack{} // Label stack for loops.
 
 	// Create new basic block for function body.
-	bb := llvm.AddBasicBlock(*fun, "")
+	bb := llvm.AddBasicBlock(fun, "")
 	b.SetInsertPointAtEnd(bb)
 
 	// Generate function body recursively.
@@ -459,7 +484,7 @@ func genFuncBody(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node) 
 }
 
 // genExpression generates LLVM IR from the expression ast.Node n.
-func genExpression(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st *util.Stack) (llvm.Value, error) {
+func genExpression(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, st *util.Stack) (llvm.Value, error) {
 	c1 := n.Children[0]
 	var res llvm.Value
 
@@ -615,7 +640,7 @@ func genExpression(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node
 }
 
 // genDeclaration generates LLVM IR that declares one or many new local variables in the inner-most scope.
-func genDeclaration(b *llvm.Builder, n *ast.Node, st *util.Stack) error {
+func genDeclaration(b llvm.Builder, n *ast.Node, st *util.Stack) error {
 	typ, err := genType(n)
 	if err != nil {
 		return fmt.Errorf("genDeclaration(): %s. Node was %s", err, n.String())
@@ -628,7 +653,7 @@ func genDeclaration(b *llvm.Builder, n *ast.Node, st *util.Stack) error {
 				return fmt.Errorf("duplicate variable declaration, %q is already declared in the same scope",
 					name)
 			}
-			val := b.CreateAlloca(typ, name)
+			val := b.CreateAlloca(typ, name) // TODO: Sigseg during parallel.
 			scope.m[name] = val
 		}
 		return nil
@@ -637,7 +662,7 @@ func genDeclaration(b *llvm.Builder, n *ast.Node, st *util.Stack) error {
 }
 
 // genDeclarationGlobal generates LLVM IR that declares a global variable and adds it to the global symbol table.
-func genDeclarationGlobal(m *llvm.Module, n *ast.Node) error {
+func genDeclarationGlobal(m llvm.Module, n *ast.Node) error {
 	typ, err := genType(n)
 	if err != nil {
 		return fmt.Errorf("genDeclarationGlobal(): %s. Node was %s", err, n.String())
@@ -654,14 +679,14 @@ func genDeclarationGlobal(m *llvm.Module, n *ast.Node) error {
 		}
 
 		// Create global variable and add it to the global symbol table.
-		globals.m[name] = llvm.AddGlobal(*m, typ, name)
+		globals.m[name] = llvm.AddGlobal(m, typ, name)
 		globals.Unlock()
 	}
 	return nil
 }
 
 // genAssign generates LLVM IR that assigns a value to an existing variable.
-func genAssign(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st *util.Stack) error {
+func genAssign(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, st *util.Stack) error {
 	name := n.Children[0].Data.(string)
 	c1 := n.Children[1]
 
@@ -697,7 +722,7 @@ func genAssign(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st
 }
 
 // genReturn generates LLVM IR that terminates the current basic block with a return statement.
-func genReturn(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st *util.Stack) error {
+func genReturn(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, st *util.Stack) error {
 	c1 := n.Children[0]
 	switch c1.Typ {
 	case ast.INTEGER_DATA:
@@ -721,13 +746,13 @@ func genReturn(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st
 }
 
 // genPrint generates LLVM IR that calls printf to print constants, identifiers or expressions.
-func genPrint(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st *util.Stack) error {
+func genPrint(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, st *util.Stack) error {
 	var pf llvm.Value
 
 	// Check if printf is defined.
 	globals.Lock()
 	if pf = m.NamedFunction("printf"); pf.IsAFunction().IsNil() {
-		pf = genPrintf(*m)
+		pf = genPrintf(m)
 	}
 	globals.Unlock()
 
@@ -799,7 +824,7 @@ func genPrint(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st 
 }
 
 // genRelation generates LLVM IR that compares two operands with the given relation.
-func genRelation(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st *util.Stack) (llvm.Value, error) {
+func genRelation(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, st *util.Stack) (llvm.Value, error) {
 	c1 := n.Children[0]
 	c2 := n.Children[1]
 	var op1, op2 llvm.Value
@@ -870,7 +895,7 @@ func genRelation(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, 
 }
 
 // genIf generates LLVM IR for either IF-THEN or IF-THEN-ELSE statements.
-func genIf(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st, ls *util.Stack) error {
+func genIf(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, st, ls *util.Stack) error {
 	// Generate relation.
 	var conv llvm.BasicBlock
 	var val llvm.Value
@@ -880,11 +905,11 @@ func genIf(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st, ls
 	}
 
 	// Set up new basic block(s).
-	thn := llvm.AddBasicBlock(*fun, "")
+	thn := llvm.AddBasicBlock(fun, "")
 
 	if len(n.Children) == 2 {
 		// IF-THEN.
-		conv = llvm.AddBasicBlock(*fun, "")
+		conv = llvm.AddBasicBlock(fun, "")
 
 		// Generate branch.
 		b.CreateCondBr(val, thn, conv)
@@ -902,7 +927,7 @@ func genIf(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st, ls
 	} else {
 		// IF-THEN-ELSE.
 		var retA, retB bool
-		els := llvm.AddBasicBlock(*fun, "")
+		els := llvm.AddBasicBlock(fun, "")
 
 		// Generate branch.
 		b.CreateCondBr(val, thn, els)
@@ -914,7 +939,7 @@ func genIf(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st, ls
 		}
 
 		if !retA {
-			conv = llvm.AddBasicBlock(*fun, "")
+			conv = llvm.AddBasicBlock(fun, "")
 			b.CreateBr(conv)
 		}
 
@@ -926,7 +951,7 @@ func genIf(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st, ls
 
 		if !retB {
 			if conv.IsNil() {
-				conv = llvm.AddBasicBlock(*fun, "")
+				conv = llvm.AddBasicBlock(fun, "")
 			}
 			b.CreateBr(conv)
 		}
@@ -940,10 +965,10 @@ func genIf(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st, ls
 }
 
 // genWhile generates LLVM IR for loops of type WHILE(relation) DO.
-func genWhile(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st, ls *util.Stack) error {
-	head := llvm.AddBasicBlock(*fun, "")
-	body := llvm.AddBasicBlock(*fun, "")
-	conv := llvm.AddBasicBlock(*fun, "")
+func genWhile(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, st, ls *util.Stack) error {
+	head := llvm.AddBasicBlock(fun, "")
+	body := llvm.AddBasicBlock(fun, "")
+	conv := llvm.AddBasicBlock(fun, "")
 
 	// Push head to label stack for CONTINUE statement.
 	ls.Push(head)
@@ -975,7 +1000,7 @@ func genWhile(b *llvm.Builder, m *llvm.Module, fun *llvm.Value, n *ast.Node, st,
 }
 
 // genContinue generates LLVM IR for a continue statement for loops.
-func genContinue(b *llvm.Builder, ls *util.Stack) error {
+func genContinue(b llvm.Builder, ls *util.Stack) error {
 	var l interface{}
 	if l = ls.Peek(); l == nil {
 		return errors.New("label stack is empty")
@@ -987,7 +1012,7 @@ func genContinue(b *llvm.Builder, ls *util.Stack) error {
 
 // genStore generates LLVM IR store instruction that stores the src llvm.Value in the requested identifier with
 // given name.
-func genStore(src llvm.Value, name string, b *llvm.Builder, m *llvm.Module, fun *llvm.Value, st *util.Stack) error {
+func genStore(src llvm.Value, name string, b llvm.Builder, m llvm.Module, fun llvm.Value, st *util.Stack) error {
 	// Check local scopes.
 	for i1 := 1; i1 <= st.Size(); i1++ {
 		if symtab := st.Get(i1).(*symTab); symtab != nil {
@@ -1017,7 +1042,7 @@ func genStore(src llvm.Value, name string, b *llvm.Builder, m *llvm.Module, fun 
 
 // genLoad generates LLVM IR load instruction for the requested identifier with given name and returns the
 // resulting llvm.Value.
-func genLoad(name string, b *llvm.Builder, m *llvm.Module, fun *llvm.Value, st *util.Stack) (llvm.Value, error) {
+func genLoad(name string, b llvm.Builder, m llvm.Module, fun llvm.Value, st *util.Stack) (llvm.Value, error) {
 	// Check local scopes.
 	for i1 := 1; i1 <= st.Size(); i1++ {
 		if symtab := st.Get(i1).(*symTab); symtab != nil {
@@ -1044,6 +1069,9 @@ func genLoad(name string, b *llvm.Builder, m *llvm.Module, fun *llvm.Value, st *
 
 // genType takes an ast.TYPED_VARIABLE_LIST or ast.DECLARATION and returns the type of the data variable(s).
 func genType(n *ast.Node) (res llvm.Type, _ error) {
+	if n == nil {
+		return llvm.Type{}, errors.New("cannot generate LLVM type, node is <nil>")
+	}
 	if n.Data == nil {
 		return res, errors.New("syntax tree node doesn't carry data")
 	}
@@ -1099,9 +1127,9 @@ func genMain(b llvm.Builder, m llvm.Module, n *ast.Node) error {
 	main.Param(1).SetName("argv")
 	bb := llvm.AddBasicBlock(main, "")
 	b.SetInsertPointAtEnd(bb)
-	argcGood := llvm.AddBasicBlock(main, "argcGood")
-	argcBad := llvm.AddBasicBlock(main, "argcBad")
-	argvBad := llvm.AddBasicBlock(main, "argvBad")
+	argcGood := llvm.AddBasicBlock(main, "")
+	argcBad := llvm.AddBasicBlock(main, "")
+	argvBad := llvm.AddBasicBlock(main, "")
 
 	// Verify arguments before calling VSL function.
 	argc := b.CreateSub(main.Param(0), llvm.ConstInt(i, 1, true), "")
@@ -1120,17 +1148,8 @@ func genMain(b llvm.Builder, m llvm.Module, n *ast.Node) error {
 	// i1 is the "iterator/incrementor" variable pointing to the right index of argv.
 	i1 := llvm.ConstInt(i, 1, false)
 
+	// Compile time indexer.
 	idx := 0
-	indices := make([]llvm.Value, 2)
-	indices[0] = llvm.ConstInt(i, 0, false) // TODO: Make dynamic.
-	indices[1] = llvm.ConstInt(i, 0, false)
-
-	// TODO: Delete below.
-	pfff := m.NamedFunction("printf")
-	if pfff.IsAFunction().IsNil() {
-		genPrintf(m)
-	}
-	// TODO: Delete above.
 
 	for _, e1 := range callee.Children[2].Children {
 		// Typed variable list.
@@ -1239,8 +1258,74 @@ func genAtof(m llvm.Module) llvm.Value {
 
 // genTargetTriple generates an LLVM target triple given the compiler options.
 func genTargetTriple(opt *util.Options) (llvm.Target, string, error) {
-	// TODO: Make dynamic.
-	triple := llvm.DefaultTargetTriple()
+	sb := strings.Builder{}
+	var triple string
+
+	// Target architecture. Revert to host system default if unknown.
+	if opt.TargetArch == util.UnknownArch {
+		// Use compiler host's default triple.
+		triple = llvm.DefaultTargetTriple()
+	} else {
+		// Try generating target triple from CLI arguments.
+		sb.Grow(20)
+
+		switch opt.TargetArch {
+		case util.Aarch64:
+			sb.WriteString("aarch64")
+		case util.Riscv64:
+			sb.WriteString("riscv64")
+		case util.Riscv32:
+			sb.WriteString("riscv32")
+		case util.X86_64:
+			sb.WriteString("x86_64")
+		case util.X86_32:
+			sb.WriteString("x86")
+		default:
+			return llvm.Target{}, "", fmt.Errorf("unnsupported target architecture identifier %d",
+				opt.TargetArch)
+		}
+		sb.WriteRune('-')
+
+		// Target vendor. Defaults to PC.
+		switch opt.TargetVendor {
+		case util.PC:
+			sb.WriteString("pc")
+		case util.Apple:
+			sb.WriteString("apple")
+		case util.IBM:
+			sb.WriteString("ibm")
+		case util.UnknownVendor:
+			sb.WriteString("pc")
+		default:
+			return llvm.Target{}, "", fmt.Errorf("unnsupported target vendor identifier %d",
+				opt.TargetVendor)
+		}
+		sb.WriteRune('-')
+
+		// Target operating system.
+		if opt.TargetOS > 0 {
+			switch opt.TargetOS {
+			case util.Linux:
+				sb.WriteString("linux")
+			case util.Windows:
+				sb.WriteString("win32")
+			case util.MAC:
+				sb.WriteString("darwin")
+			default:
+				return llvm.Target{}, "", fmt.Errorf("unnsupported target operating system identifier %d",
+					opt.TargetArch)
+			}
+		} else {
+			sb.WriteString("none")
+		}
+
+		// Target abi/environment.
+		sb.WriteRune('-')
+		sb.WriteString("gnu") // Default to GNU for now. TODO: Improve?
+
+		triple = sb.String()
+	}
+
 	if opt.Verbose {
 		fmt.Printf("compiling for target %s\n", triple)
 	}

@@ -15,20 +15,18 @@ import (
 // symType differentiate different types of symbols, e.g. global variable, function and parameters.
 type symType int
 
-// dataType differentiates data types, such as integer, floating point and boolean.
-type dataType int
-
 // Symbol refers to a variable/identifier's entry in the global symbol table.
 type Symbol struct {
-	Typ     symType  // Type of symbol.
-	Name    string   // Name of symbol.
-	Seq     int      // Sequence number of variable/function.
-	Node    *Node    // Pointer to Symbol's definition node in syntax tree.
-	DataTyp dataType // Data type of variable.
-	Nparams int      // Number of parameters defined for function.
-	Nlocals int      // Number of local variables defined for function, excluding parameters.
-	Leaf    bool     // Set true if this function does not call another function.
-	Locals  SymTab   // Locally defined function variables and parameters.
+	Typ     symType   // Type of symbol.
+	Name    string    // Name of symbol.
+	Seq     int       // Sequence number of variable/function.
+	Node    *Node     // Pointer to Symbol's definition node in syntax tree.
+	DataTyp int       // Data type of variable.
+	Nparams int       // Number of parameters defined for function.
+	Nlocals int       // Number of local variables defined for function, excluding parameters.
+	Leaf    bool      // Set true if this function does not call another function.
+	Locals  SymTab    // Locally defined function variables and parameters.
+	Params  []*Symbol // Pointers to function parameters in order.
 }
 
 // SymTab wraps a hash table that can be accessed by multiple threads using a mutex.
@@ -54,12 +52,12 @@ const (
 )
 
 const (
-	DataInteger dataType = iota
+	DataInteger = iota
 	DataFloat
 )
 
 // -------------------
-// ----- Globals -----
+// ----- globals -----
 // -------------------
 
 // sTyp defines strings for print friendly output of symType.
@@ -71,8 +69,8 @@ var sTyp = []string{
 	"Block NODE",
 }
 
-// dTyp defines string for print friendly output of dataType.
-var dTyp = []string{
+// DTyp defines string for print friendly output of int.
+var DTyp = []string{
 	"integer",
 	"float",
 	"bool",
@@ -108,7 +106,7 @@ var seqCtrl struct {
 }
 
 // ----------------------
-// ----- Functions ------
+// ----- functions ------
 // ----------------------
 
 // GenerateSymTab populates the symbol table for the VSL program.
@@ -123,17 +121,22 @@ func GenerateSymTab(opt util.Options) error {
 	Strings = struct {
 		St []string
 		mx sync.Mutex
-	}{St: make([]string, 0, sSize), mx: sync.Mutex{}}
+	}{
+		St: make([]string, 0, sSize),
+		mx: sync.Mutex{},
+	}
 
 	Floats = struct {
 		Ft []float32
 		mx sync.Mutex
-	}{Ft: make([]float32, 0, fSize), mx: sync.Mutex{}}
+	}{
+		Ft: make([]float32, 0, fSize),
+		mx: sync.Mutex{},
+	}
 
 	if opt.Threads > 1 {
 		// Parallel.
 		wg := sync.WaitGroup{} // Used for synchronising worker threads with main thread.
-		ts := sync.WaitGroup{} // Used for synchronising worker threads before doing recursive binding.
 
 		// Initiate worker threads.
 		t := opt.Threads        // Max number of threads to initiate.
@@ -144,93 +147,130 @@ func GenerateSymTab(opt util.Options) error {
 		n := l / t   // Number of jobs per worker thread.
 		res := l % t // Residual work for res first threads.
 
+		start := 0
+		end := n
+
 		// Allocate memory for errors; one per worker thread.
-		errs.err = make([]error, 0, t)
+		errs := util.NewPerror(t)
+		defer errs.Stop()
 
-		// Launch t threads.
-		for i1 := 0; i1 < l; i1 += n {
-			m := n
-			i := i1
+		wg.Add(t) // Tell main thread to wait for t worker threads (go routines).
+
+		// Launch t threads (go routines).
+		for i1 := 0; i1 < t; i1++ {
 			if i1 < res {
-				// Indicate that this worker thread should do one more job.
-				m++
-				i1++
+				// This worker thread should do one residual job.
+				end++
 			}
-			wg.Add(1) // Tell main thread to wait for new thread to finish.
-			go func(i, j int, wg, ts *sync.WaitGroup) {
-				defer wg.Done() // Alert main thread that this worker is done when returning.
+			go func(start, end int, wg *sync.WaitGroup) {
+				defer wg.Done()
 
-				// Bind function to global symbol table.
-				ts.Add(1)
-				for i2 := 0; i2 < j; i2++ {
-					if err := Root.Children[i+i2].bindGlobal(opt); err != nil {
-						errs.mx.Lock()
-						errs.err = append(errs.err, err)
-						errs.mx.Unlock()
+				for _, e2 := range Root.Children[start:end] {
+					if err := e2.bindGlobal(opt); err != nil {
+						errs.Append(err)
 					}
 				}
-				ts.Done()
+			}(start, end, &wg)
+			start = end
+			end += n
+		}
 
-				// TODO: KAN IKKE GJØRE SLIK. Se llvm transform for fasit.
-				// Wait for other worker threads to finish adding functions to global symbol table.
-				ts.Wait()
+		// Wait for worker threads to bind global definitions.
+		wg.Wait()
+
+		if errs.Len() > 0 {
+			for e1 := range errs.Errors() {
+				fmt.Println(e1)
+			}
+			return errors.New("multiple errors during parallel symbol table generation")
+		}
+
+		if len(Funcs.F) < 1 {
+			return errors.New("no functions defined")
+		}
+
+		errs.Flush()
+
+		// Bind function variables.
+		l = len(Funcs.F)
+		t = opt.Threads
+		if t > l {
+			t = l
+		}
+		n = l / t
+		res = l % t
+
+		start = 0
+		end = n
+
+		wg.Add(t)
+
+		// Launch t threads.
+		for i1 := 0; i1 < t; i1++ {
+			if i1 < res {
+				// Indicate that this worker thread should do one more job.
+				end++
+			}
+			go func(start, end int, wg *sync.WaitGroup) {
+				defer wg.Done() // Alert main thread that this worker is done when returning.
 
 				// Bind function's local variables.
 				st := util.Stack{}
 				st.Push(&Global) // Let global scope live for the duration of all functions.
-				for i2 := 0; i2 < j; i2++ {
-					if Root.Children[i+i2].Typ != FUNCTION {
-						continue
-					}
-					f := Root.Children[i+i2]
-					st.Push(&f.Entry.Locals) // Push function's scope to stack.
-					//f.Children[3].Entry = f.Entry // Link FUNCTION body BLOCK to symbol table entry of function.
-					for _, e1 := range f.Children[3].Children {
-						if err := e1.bind(&st, f.Entry); err != nil {
-							errs.mx.Lock()
-							errs.err = append(errs.err, err)
-							errs.mx.Unlock()
+
+				for _, e2 := range Funcs.F[start:end] {
+					st.Push(&e2.Locals) // Push function's scope to stack.
+					for _, e3 := range e2.Node.Children[3].Children {
+						if err := e3.bind(&st, e2); err != nil {
+							errs.Append(err)
 						}
 					}
 					st.Pop() // Pop function's scope from stack.
 				}
 				st.Pop() // Pop global scope from stack.
-			}(i, m, &wg, &ts)
+			}(start, end, &wg)
+			start = end
+			end += n
 		}
 
 		// Wait for worker threads to finish.
 		wg.Wait()
 
 		// Check for errors.
-		if len(errs.err) > 0 {
+		if errs.Len() > 0 {
+			for e1 := range errs.Errors() {
+				fmt.Println(e1)
+			}
 			return errors.New("multiple errors during parallel optimisation")
 		}
 	} else {
 		// Sequential.
+
+		// Bind globals.
 		for _, e1 := range Root.Children {
 			if err := e1.bindGlobal(opt); err != nil {
 				return err
 			}
 		}
-		for _, v := range Global.HT {
-			if v.Typ == SymFunc {
-				st := util.Stack{}
-				st.Push(&Global)   // Push global symbol table to bottom of stack.
-				st.Push(&v.Locals) // Push function's local definitions to top of stack.
-				l := v.Node.Children[3]
-				if l.Typ == BLOCK {
-					for _, e1 := range l.Children {
-						// Iterate over all children of FUNCTION's BLOCK.
-						// It is already defined and put on stack.
-						if err := e1.bind(&st, v); err != nil {
-							return fmt.Errorf("error in body of function %q: %s", v.Name, err)
-						}
+
+		// Bind function variables.
+		for _, e1 := range Funcs.F {
+			st := util.Stack{}
+			st.Push(&Global)    // Push global symbol table to bottom of stack.
+			st.Push(&e1.Locals) // Push function's local definitions to top of stack.
+			body := e1.Node.Children[3]
+			if body.Typ == BLOCK {
+				for _, e2 := range body.Children {
+					// Iterate over all children of FUNCTION's BLOCK.
+					// It is already defined and put on stack.
+					if err := e2.bind(&st, e1); err != nil {
+						return fmt.Errorf("error in body of function %q: %s", e1.Name, err)
 					}
-				} else {
-					if err := l.bind(&st, v); err != nil {
-						// Single statement function body. Bind statement recursively.
-						return fmt.Errorf("error in body of function %q: %s", v.Name, err)
-					}
+				}
+			} else {
+				if err := body.bind(&st, e1); err != nil {
+					// Single statement function body. Bind statement recursively.
+					return fmt.Errorf("error in body of function %q: %s", e1.Name, err)
 				}
 			}
 		}
@@ -238,7 +278,8 @@ func GenerateSymTab(opt util.Options) error {
 	return nil
 }
 
-// bindGlobal binds global definitions to the global symbol table.
+// bindGlobal binds global definitions to the global symbol table and puts the function Node-Symbol pairs in the
+// Funcs global slice.
 func (n *Node) bindGlobal(opt util.Options) error {
 	var seq int
 	switch n.Typ {
@@ -264,6 +305,7 @@ func (n *Node) bindGlobal(opt util.Options) error {
 			Nlocals: 0,
 			Leaf:    true,                                                                // Assume function is leaf until otherwise disproved.
 			Locals:  SymTab{HT: make(map[string]*Symbol, len(n.Children[1].Children)+8)}, // Leave space for locals.
+			Params:  make([]*Symbol, 0, 8),                                               // Assume no more than 8 parameters. append() will expand as needed, even exceeding 8 params.
 		}
 
 		n.Entry = &s
@@ -310,6 +352,7 @@ func (n *Node) bindGlobal(opt util.Options) error {
 
 				// Add parameter to function's local variables.
 				s.Locals.Add(&param)
+				s.Params = append(s.Params, &param)
 				seq++
 				s.Nparams++
 			}
@@ -482,9 +525,9 @@ func (st *SymTab) String() string {
 // String returns a print friendly string of Symbol s.
 func (s *Symbol) String() string {
 	if s.Typ == SymFunc {
-		return fmt.Sprintf("%s [%q] (%s), params: %d, locals: %d", sTyp[s.Typ], s.Name, dTyp[s.DataTyp], s.Nparams, s.Nlocals)
+		return fmt.Sprintf("%s [%q] (%s), params: %d, locals: %d", sTyp[s.Typ], s.Name, DTyp[s.DataTyp], s.Nparams, s.Nlocals)
 	} else {
-		return fmt.Sprintf("%s [%q] (%s)", sTyp[s.Typ], s.Name, dTyp[s.DataTyp])
+		return fmt.Sprintf("%s [%q] (%s)", sTyp[s.Typ], s.Name, DTyp[s.DataTyp])
 	}
 }
 
@@ -517,7 +560,7 @@ func (s *Symbol) setDataType(n *Node) error {
 		s.DataTyp = DataFloat
 	default:
 		return fmt.Errorf("unsupported datatype, expected %s or %s, got %q at line %d:%d",
-			dTyp[DataInteger], dTyp[DataFloat], n.Data, n.Line, n.Pos)
+			DTyp[DataInteger], DTyp[DataFloat], n.Data, n.Line, n.Pos)
 	}
 	return nil
 }

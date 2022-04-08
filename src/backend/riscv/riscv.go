@@ -23,8 +23,8 @@ type register struct {
 	entry *ir.Symbol // Symbol entry in any symbol table that is residing in register.
 }
 
-// registerFile represents the register file of the current architecture.
-type registerFile struct {
+// RegisterFile represents the register file of the current architecture.
+type RegisterFile struct {
 	i   []register     // All integer registers defined for architecture.
 	f   []register     // All floating point registers defined for architecture.
 	iht map[string]int // Hash table linking identifier name and register file index for integer registers.
@@ -239,7 +239,7 @@ const word32 = 4      // word32 defines the length of a 32-bit architecture word
 const argsReg = 8     // argsReg defines the umber of arguments put directly in registers.
 
 // -------------------
-// ----- Globals -----
+// ----- globals -----
 // -------------------
 
 // wordSize defines the length of a machine word in bytes for the current architecture.
@@ -253,38 +253,38 @@ var store = "sd" // 64-bit by default.
 
 // regi is the short form for registers integers and contains string literals for base integer registers.
 var regi = [...]string{
-	"x0",
-	"x1",
-	"x2",
-	"x3",
-	"x4",
-	"x5",
-	"x6",
-	"x7",
-	"x8",
-	"x9",
-	"x10",
-	"x11",
-	"x12",
-	"x13",
-	"x14",
-	"x15",
-	"x16",
-	"x17",
-	"x18",
-	"x19",
-	"x20",
-	"x21",
-	"x22",
-	"x23",
-	"x24",
-	"x25",
-	"x26",
-	"x27",
-	"x28",
-	"x29",
-	"x30",
-	"x31",
+	"zero", // "x0",
+	"ra",   // "x1",
+	"sp",   // "x2",
+	"gp",   // "x3",
+	"tp",   // "x4",
+	"t0",   // "x5",
+	"t1",   // "x6",
+	"t2",   // "x7",
+	"s0",   // "x8",
+	"s1",   // "x9",
+	"a0",   // "x10",
+	"a1",   // "x11",
+	"a2",   // "x12",
+	"a3",   // "x13",
+	"a4",   // "x14",
+	"a5",   // "x15",
+	"a6",   // "x16",
+	"a7",   // "x17",
+	"s2",   // "x18",
+	"s3",   // "x19",
+	"s4",   // "x20",
+	"s5",   // "x21",
+	"s6",   // "x22",
+	"s7",   // "x23",
+	"s8",   // "x24",
+	"s9",   // "x25",
+	"s10",  // "x26",
+	"s11",  // "x27",
+	"t3",   // "x28",
+	"t4",   // "x29",
+	"t5",   // "x30",
+	"t6",   // "x31",
 }
 
 // regf is the short form for registers floats and contains string literals for floating point registers.
@@ -324,13 +324,13 @@ var regf = [...]string{
 }
 
 // ---------------------
-// ----- Functions -----
+// ----- functions -----
 // ---------------------
 
 // GenRiscv recursively generates RISC-V assembler code from the intermediate representation.
 func GenRiscv(opt util.Options) error {
 	// Create and initialise register file representation.
-	regFile := registerFile{
+	regFile := RegisterFile{
 		i:   make([]register, 32),
 		f:   make([]register, 32),
 		iht: make(map[string]int),
@@ -344,7 +344,7 @@ func GenRiscv(opt util.Options) error {
 	}
 
 	// If configured for 32-bit: set word-size and load and store instructions.
-	if opt.Target == util.Riscv32 {
+	if opt.TargetArch == util.Riscv32 {
 		wordSize = word32
 		load = "lw"
 		store = "sw"
@@ -454,7 +454,7 @@ func GenRiscv(opt util.Options) error {
 	}
 
 	// Write strings and float constants to data segment.
-	wr.Write("\n.data\n; ----- Strings -----\n")
+	wr.Write("\n.data\n; ----- strings -----\n")
 	for i1, e1 := range ir.Strings.St {
 		wr.Write("%s%d:\n\t.asciz\t%q\n", labelString, i1, e1)
 	}
@@ -485,6 +485,24 @@ func GenRiscv(opt util.Options) error {
 	return nil
 }
 
+// CreateRegisterFile creates a new RISC-V register file representation.
+func CreateRegisterFile(opt util.Options) *RegisterFile {
+	// Create and initialise register file representation.
+	rf := &RegisterFile{
+		i:   make([]register, 32),
+		f:   make([]register, 32),
+		iht: make(map[string]int),
+		fht: make(map[string]int),
+	}
+	for i1 := range rf.i {
+		rf.i[i1].typ = integer
+		rf.i[i1].id = i1
+		rf.f[i1].typ = float
+		rf.f[i1].id = i1
+	}
+	return rf
+}
+
 // String returns a print friendly string of the register r.
 func (r *register) String() string {
 	if r.typ == integer {
@@ -494,7 +512,7 @@ func (r *register) String() string {
 }
 
 // loadIdentifierToReg loads identifier with name s to a register. The register type and index is returned.
-func (rf *registerFile) loadIdentifierToReg(name string, f *ir.Symbol, wr *util.Writer, st *util.Stack) *register {
+func (rf *RegisterFile) loadIdentifierToReg(name string, f *ir.Symbol, wr *util.Writer, st *util.Stack) *register {
 	s, _ := ir.GetEntry(name, st) // Safe, exceptions are caught in intermediate validate stage.
 
 	if s.DataTyp == ir.DataInteger {
@@ -617,8 +635,8 @@ func (r *register) saveRegToIdentifier(name string, wr *util.Writer, st *util.St
 	}
 }
 
-// lruF returns the least recently used floating point register of registerFile rf.
-func (rf *registerFile) lruF() *register {
+// lruF returns the least recently used floating point register of RegisterFile rf.
+func (rf *RegisterFile) lruF() *register {
 	low := int((^uint(0)) >> 1) // Max integer.
 	idx := 0
 	for i1, e1 := range rf.f[:fa0] {
@@ -636,8 +654,8 @@ func (rf *registerFile) lruF() *register {
 	return &(rf.f[idx])
 }
 
-// lruI returns the least recently used usable integer register of registerFile rf.
-func (rf *registerFile) lruI() *register {
+// lruI returns the least recently used usable integer register of RegisterFile rf.
+func (rf *RegisterFile) lruI() *register {
 	low := int((^uint(0)) >> 1) // Max integer.
 	idx := 0
 	// Use any registers in range [x18, x31]
@@ -650,9 +668,9 @@ func (rf *registerFile) lruI() *register {
 	return &(rf.i[idx])
 }
 
-// useI updates the sequence number of the integer register reg in registerFile rf.
+// useI updates the sequence number of the integer register reg in RegisterFile rf.
 // If an identifier Symbol is provided the register is updated to be holding the value of the identifier.
-func (rf *registerFile) useI(idx int, ident *ir.Symbol) {
+func (rf *RegisterFile) useI(idx int, ident *ir.Symbol) {
 	rf.i[idx].seq = rf.seq
 	rf.seq++
 	if ident != nil {
@@ -660,9 +678,9 @@ func (rf *registerFile) useI(idx int, ident *ir.Symbol) {
 	}
 }
 
-// useF updates the sequence number of the float register reg in registerFile rf.
+// useF updates the sequence number of the float register reg in RegisterFile rf.
 // If an identifier Symbol is provided the register is updated to be holding the value of the identifier.
-func (rf *registerFile) useF(idx int, ident *ir.Symbol) {
+func (rf *RegisterFile) useF(idx int, ident *ir.Symbol) {
 	rf.f[idx].seq = rf.seq
 	rf.seq++
 	if ident != nil {
@@ -671,7 +689,7 @@ func (rf *registerFile) useF(idx int, ident *ir.Symbol) {
 }
 
 // genAsm generates assembly code recursively from the ir.Node n.
-func genAsm(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *registerFile) error {
+func genAsm(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *RegisterFile) error {
 	switch n.Typ {
 	case ir.EXPRESSION:
 		if _, err := genExpression(n, f, wr, st, rf); err != nil {

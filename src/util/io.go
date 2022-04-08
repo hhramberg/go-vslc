@@ -32,7 +32,7 @@ var cc chan error      // Close channel used by main thread to signal to end wri
 var wg *sync.WaitGroup // used for synchronising when I/O finished writing to output.
 
 // ---------------------
-// ----- Functions -----
+// ----- functions -----
 // ---------------------
 
 // Write writes a format string to the Writer's buffer.

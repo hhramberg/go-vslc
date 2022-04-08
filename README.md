@@ -89,8 +89,8 @@ The scanner of this compiler was heavily inspired by Rob Pike's
 available [here](https://talks.golang.org/2011/lex.slide#1).
 
 In the video Rob Pike suggests that regular expressions are overkill for simple language scanners. He proposes the state
-function model where a scanner searches for lexemes by moving through the source stream, character by character, and acting
-based on its internal state.
+function model where a scanner searches for lexemes by moving through the source stream, character by character, and
+acting based on its internal state.
 
 ### Function level parallelism
 
@@ -113,3 +113,17 @@ shared resources between functions are global variables and the functions themse
 adequate to validate inter-function dependencies.
 
 ## LLVM
+
+[LLVM](https://llvm.org/) is a compiler toolchain, its statically typed intermediate representation (IR) and compiler
+backend being its most prominent features. It is widely used in industry and academia and is interoperable with
+different computer architectures, operating systems and vendors. It uses static single assignment (SSA) form to run
+optimisation passes and register allocation that preferably improves compiled code quality.
+
+In this project LLVM is one of two ways of generating near machine code output, the other being the built-in syntax tree
+to assembler backend. Function level parallelism is implemented in LLVM IR generation the same way it is implemented in
+the built-in syntax tree based assembler generators. When using LLVM for code generation, the output writer won't write
+to the output file in parallel. This is because writing object file code in parallel is outside the scope of this
+thesis.
+
+From the viewpoint of this project, LLVM is the backend, when enabled, while the frontend serves as a VSL-to-LLVM
+parser.

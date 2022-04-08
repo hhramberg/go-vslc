@@ -18,14 +18,14 @@ import (
 // ---------------------
 
 // -------------------
-// ----- Globals -----
+// ----- globals -----
 // -------------------
 
 // ---------------------
-// ----- Functions -----
+// ----- functions -----
 // ---------------------
 // genIf generates an IF or IF-ELSE statement. An error is returned if something went wrong.
-func genIf(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *registerFile) error {
+func genIf(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *RegisterFile) error {
 	rel := n.Children[0]   // Relation.
 	c1 := n.Children[1]    // Body of IF-THEN.
 	var rs1, rs2 *register // Source registers for comparison.
@@ -85,7 +85,7 @@ func genIf(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *re
 }
 
 // genWhile generates a WHILE statement. An error is returned if something went wrong.
-func genWhile(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *registerFile) error {
+func genWhile(n *ir.Node, f *ir.Symbol, wr *util.Writer, st, ls *util.Stack, rf *RegisterFile) error {
 	var rs1, rs2 *register // Source registers for comparison.
 	var err error
 	c1 := n.Children[0] // Relation.
@@ -135,7 +135,7 @@ func genContinue(wr *util.Writer, ls *util.Stack) error {
 
 // genRel generates a relation by moving both operands to some registers.
 // An error is returned if something went wrong.
-func genRel(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *registerFile) (rs1, rs2 *register, err error) {
+func genRel(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *RegisterFile) (rs1, rs2 *register, err error) {
 	c1 := n.Children[0]
 	c2 := n.Children[1]
 	var op1, op2 string

@@ -27,7 +27,7 @@ const (
 )
 
 // -------------------
-// ----- Globals -----
+// ----- globals -----
 // -------------------
 
 var mx sync.Mutex // Mutex for synchronising worker threads.
@@ -37,17 +37,17 @@ var labelIndices [LabelJump + 1]int
 
 // labelPrefixes stores the string literal prefixes for labels of types.
 var labelPrefixes = [LabelJump + 1]string{
-	"LWhileHead",
-	"LWhileEnd",
-	"LIf",
-	"LIfElse",
-	"LIfEnd",
-	"LIfElseEnd",
-	"LJump",
+	"_LWhileHead_",
+	"_LWhileEnd_",
+	"_LIf_",
+	"_LIfElse_",
+	"_LIfEnd_",
+	"_LIfElseEnd_",
+	"_LJump_",
 }
 
 // ---------------------
-// ----- Functions -----
+// ----- functions -----
 // ---------------------
 
 // NewLabel returns a new label of type typ.
@@ -55,10 +55,10 @@ func NewLabel(typ int) string {
 	mx.Lock()
 	mx.Unlock()
 	if typ >= 0 && typ < len(labelIndices) {
-		s := fmt.Sprintf("%s_%03d", labelPrefixes[typ], labelIndices[typ])
+		s := fmt.Sprintf("%s%03d", labelPrefixes[typ], labelIndices[typ])
 		labelIndices[typ]++
 		return s
 	} else {
-		return "# LABEL ERROR"
+		return "; LABEL ERROR"
 	}
 }

@@ -13,13 +13,16 @@ import (
 // ----------------------------
 
 type Options struct {
-	Src         string // Path to source file.
-	Out         string // Path to output file.
-	Threads     int    // Thread count.
-	Verbose     bool   // Set true if compiler should log statistical data to stdout.
-	TokenStream bool   // Set true if compiler should output token stream and exit.
-	LLVM        bool   // Set true if compiler should use the LLVM framework to issue optimisations and code generaton.
-	Target      int    // Output target architecture.
+	Src          string // Path to source file.
+	Out          string // Path to output file.
+	Threads      int    // Thread count.
+	Verbose      bool   // Set true if compiler should log statistical data to stdout.
+	TokenStream  bool   // Set true if compiler should output token stream and exit.
+	LLVM         bool   // Set true if compiler should use the LLVM framework to issue optimisations and code generaton.
+	TargetArch   int    // Output target architecture.
+	TargetVendor int    // Output target vendor type. 0 = unknown.
+	TargetCPU    int    // Output target CPU. 0 = generic CPU.
+	TargetOS     int    // Output target operating system type.
 }
 
 // ---------------------
@@ -29,14 +32,42 @@ type Options struct {
 const maxThreads = 64 // Maximum threads allowed executing in parallel.
 const appVersion = "vsl compiler 1.0"
 
+// Target machine architectures.
 const (
-	Aarch64 = iota
+	UnknownArch = iota
+	X86_64
+	X86_32
+	Aarch64
 	Riscv64
 	Riscv32
 )
 
+// Target operating system.
+const (
+	UnknownOS = iota
+	Linux
+	Windows
+	MAC
+)
+
+// Target vendor.
+const (
+	UnknownVendor = iota
+	Apple
+	PC
+	MIPS
+	IBM
+	SUSE
+	AMD
+)
+
+// Target CPU.
+const (
+	CPUGeneric = iota
+)
+
 // ---------------------
-// ----- Functions -----
+// ----- functions -----
 // ---------------------
 
 // ParseArgs parses command line arguments.
@@ -79,7 +110,7 @@ func ParseArgs() (Options, error) {
 				}
 			}
 			i1++
-		case "-target":
+		case "-arch":
 			// Output architecture.
 			if i1+1 >= len(args) {
 				return opt, fmt.Errorf("got flag %s but no argument", args[i1])
@@ -89,13 +120,55 @@ func ParseArgs() (Options, error) {
 			}
 			switch args[i1+1] {
 			case "aarch64":
-				opt.Target = Aarch64
+				opt.TargetArch = Aarch64
 			case "riscv64":
-				opt.Target = Riscv64
+				opt.TargetArch = Riscv64
 			case "riscv32":
-				opt.Target = Riscv32
+				opt.TargetArch = Riscv32
+			case "x86_64":
+				opt.TargetArch = X86_64
+			case "x86_32":
+				opt.TargetArch = X86_32
 			default:
 				return opt, fmt.Errorf("unexpected architecture identifier: %s", args[i1+1])
+			}
+			i1++
+		case "-os":
+			// Output operating system type.
+			if i1+1 >= len(args) {
+				return opt, fmt.Errorf("got flag %s but no argument", args[i1])
+			}
+			if strings.HasPrefix(args[i1+1], "-") {
+				return opt, fmt.Errorf("expected operating system identifier, got new flag %s", args[i1+1])
+			}
+			switch args[i1+1] {
+			case "linux":
+				opt.TargetOS = Linux
+			case "windows":
+				opt.TargetOS = Windows
+			case "mac":
+				opt.TargetOS = MAC
+			default:
+				return opt, fmt.Errorf("unexpected operating system identifier: %s", args[i1+1])
+			}
+			i1++
+		case "-vendor":
+			// Output vendor type.
+			if i1+1 >= len(args) {
+				return opt, fmt.Errorf("got flag %s but no argument", args[i1])
+			}
+			if strings.HasPrefix(args[i1+1], "-") {
+				return opt, fmt.Errorf("expected vendor identifier, got new flag %s", args[i1+1])
+			}
+			switch args[i1+1] {
+			case "pc":
+				opt.TargetVendor = PC
+			case "apple":
+				opt.TargetOS = Apple
+			case "ibm":
+				opt.TargetVendor = IBM
+			default:
+				return opt, fmt.Errorf("unexpected vendor identifier: %s", args[i1+1])
 			}
 			i1++
 		case "-ts":

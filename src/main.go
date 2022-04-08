@@ -5,12 +5,16 @@ package main
 import (
 	"fmt"
 	"os"
-	"sync"
-	"time"
+	lir2 "vslc/src/backend/lir"
+	"vslc/src/ir/lir"
+	"vslc/src/ir/lir/types"
+)
+
+import (
 	"vslc/src/backend"
 	"vslc/src/frontend"
 	"vslc/src/ir"
-	ll2 "vslc/src/ir/llvm"
+	"vslc/src/ir/llvm"
 	"vslc/src/util"
 )
 
@@ -38,26 +42,17 @@ func run(opt util.Options) error {
 
 	// Optimise syntax tree.
 	if err := ir.Optimise(opt); err != nil {
-		if opt.Threads > 1 {
-			// Print errors during parallel optimisation before exiting.
-			for _, e1 := range ir.Errors() {
-				fmt.Println(e1)
-			}
-		}
 		return fmt.Errorf("syntax tree error: %s\n", err)
 	}
 
-	// TODO: Delete.
 	if opt.Verbose {
+		fmt.Println("Syntax tree:")
 		ir.Root.Print(0, true)
 	}
 
 	// Gen LLVM and exit, if flag is passed.
 	if opt.LLVM {
-		//if err = llvm.GenLLVM(opt, ir.Root); err != nil {
-		//	return fmt.Errorf("error reported by LLVM: %s", err)
-		//}
-		if err = ll2.GenLLVM(opt, ir.Root); err != nil {
+		if err = llvm.GenLLVM(opt, ir.Root); err != nil {
 			return fmt.Errorf("error reported by LLVM: %s", err)
 		}
 		return nil
@@ -77,7 +72,7 @@ func run(opt util.Options) error {
 
 	// Generate assembler.
 	if err = backend.GenerateAssembler(opt); err != nil {
-		return fmt.Errorf("code generation error: %s\n", err)
+		return fmt.Errorf("assembler generation error: %s", err)
 	}
 	return nil
 }
@@ -90,33 +85,62 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Initiate output writer.
-	wg := sync.WaitGroup{}
-	if len(opt.Out) > 0 {
-		// Attempt to open output file. Create new file if necessary.
-		if f, err := os.OpenFile(opt.Out, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err != nil {
-			defer func(f *os.File) {
-				err := f.Close()
-				if err != nil {
-					fmt.Println(err)
-				}
-			}(f)
-			util.ListenWrite(opt, f, &wg)
-		} else {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-	} else {
-		// Write results to stdout.
-		util.ListenWrite(opt, nil, &wg)
-	}
-	defer util.Close()
+	//wg := sync.WaitGroup{}
+	//
+	//// Initiate output writer.
+	//if !opt.LLVM {
+	//	// Writing LLVM generated object code in parallel is outside the scope of this project.
+	//	if len(opt.Out) > 0 {
+	//		// Attempt to open output file. Create new file if necessary.
+	//		if f, err := os.OpenFile(opt.Out, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+	//			defer func(f *os.File) {
+	//				err := f.Close()
+	//				if err != nil {
+	//					fmt.Println(err)
+	//				}
+	//			}(f)
+	//			util.ListenWrite(opt, f, &wg)
+	//		} else {
+	//			fmt.Println(err)
+	//			os.Exit(1)
+	//		}
+	//	} else {
+	//		// Write results to stdout.
+	//		util.ListenWrite(opt, nil, &wg)
+	//	}
+	//	defer util.Close()
+	//}
+	//if err := run(opt); err != nil {
+	//	fmt.Printf("Error: %s", err)
+	//}
+	//
+	//// Wait for code generation to complete.
+	//wg.Wait()               // TODO: Make this such that it works.
+	//time.Sleep(time.Second) // TODO: Delete.
 
-	if err := run(opt); err != nil {
-		fmt.Printf("Error: %s", err)
+	// TODO: Below is test only.
+	m := lir.CreateModule("")
+	g := m.CreateGlobalInt("n")
+	_ = m.CreateGlobalFloat("x")
+	foo, err := m.CreateFunction(types.Int, "foo")
+	if err != nil {
+		fmt.Println(err)
+		return
 	}
+	param := foo.CreateParamInt("")
+	bb := foo.CreateBlock()
+	y := bb.CreateLoad(g)
+	a := bb.CreateConstantInt(1)
+	b := bb.CreateConstantInt(5)
+	_ = bb.CreateMul(a, b)
+	d := bb.CreateLoad(param)
+	e := bb.CreateSub(b, d)
+	x := bb.CreateDiv(e, y)
+	//_ = bb.CreateLoad(g)
+	bb.CreateReturn(x)
+	fmt.Println(m.String())
 
-	// Wait for code generation to complete.
-	wg.Wait()               // TODO: Make this such that it works.
-	time.Sleep(time.Second) // TODO: Delete.
+	if err := lir2.AllocateRegisters(opt, m); err != nil {
+		fmt.Printf("register allocation failed: %s\n", err)
+	}
 }

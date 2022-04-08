@@ -8,13 +8,21 @@ import (
 	"vslc/src/util"
 )
 
-// errs handles error reporting during parallel optimisation.
-// Since errors can occur at multiple worker threads there may be multiple
-// errors to report when main thread resumes control.
-var errs struct {
-	err []error    // Slice of errors.
-	mx  sync.Mutex // For synchronising worker threads.
-}
+// ----------------------------
+// ----- Type definitions -----
+// ----------------------------
+
+// ----------------------
+// ----- Constants ------
+// ----------------------
+
+// -------------------
+// ----- globals -----
+// -------------------
+
+// ---------------------
+// ----- functions -----
+// ---------------------
 
 // Optimise applies optimisations to the parse tree starting at the root node.
 func Optimise(opt util.Options) error {
@@ -34,40 +42,44 @@ func Optimise(opt util.Options) error {
 		n := l / t   // Number of jobs per worker thread.
 		res := l % t // Residual work for res first threads.
 
-		// Allocate memory for errors; one per worker thread.
-		errs = struct {
-			err []error
-			mx  sync.Mutex
-		}{err: make([]error, 0, t), mx: sync.Mutex{}}
+		start := 0
+		end := n
+
+		// Use parallel error listener for listening for errors from worker threads.
+		errs := util.NewPerror(t)
+
+		// Tell main thread that we're launching t threads (go routines).
+		wg.Add(t)
 
 		// Launch t threads.
-		for i1 := 0; i1 < l; i1 += n {
-			m := n
-			i := i1
+		for i1 := 0; i1 < t; i1++ {
 			if i1 < res {
-				// Indicate that this worker thread should do one more job.
-				m++
-				i1++
+				// This worker thread should do one residual job.
+				end++
 			}
-			wg.Add(1) // Tell main thread to wait for new thread to finish.
-			go func(i, j int, wg *sync.WaitGroup) {
-				defer wg.Done() // Alert main thread that this worker is done when returning.
-				for i2 := 0; i2 < j; i2++ {
-					if err := Root.Children[0].Children[i+i2].optimise(); err != nil {
-						errs.mx.Lock()
-						errs.err = append(errs.err, err)
-						errs.mx.Unlock()
+			
+			go func(start, end int, wg *sync.WaitGroup) {
+				defer wg.Done()
+				for _, e2 := range Root.Children[0].Children[start:end] {
+					if err := e2.optimise(); err != nil {
+						errs.Append(err)
 					}
 				}
-			}(i, m, &wg)
+			}(start, end, &wg)
+			start = end
+			end += n
 		}
 
 		// Wait for worker threads to finish.
 		wg.Wait()
+		errs.Stop()
 
 		// Check for errors.
-		if len(errs.err) > 0 {
-			return errors.New("multiple errors during parallel optimisation")
+		if errs.Len() > 0 {
+			for e1 := range errs.Errors() {
+				fmt.Println(e1)
+			}
+			return errors.New("errors during parallel optimisation")
 		}
 	} else {
 		// Sequential.
@@ -79,11 +91,6 @@ func Optimise(opt util.Options) error {
 	Root.Children = Root.Children[0].Children
 
 	return nil
-}
-
-// Errors returns the slice of reported errors, if any, during parallel optimisation.
-func Errors() []error {
-	return errs.err
 }
 
 // paraPrepare eliminates the global list structure of the root node in preparation
@@ -207,7 +214,7 @@ func (n *Node) constantFolding() error {
 				res = a / b
 			default:
 				return fmt.Errorf("line %d:%d: binary operator %s not defined for %s",
-					n.Line, n.Pos, n.Data.(string), dTyp[DataFloat])
+					n.Line, n.Pos, n.Data.(string), DTyp[DataFloat])
 			}
 			*n = *c0
 			n.Data = res
@@ -238,7 +245,7 @@ func (n *Node) constantFolding() error {
 					res = a / b
 				default:
 					return fmt.Errorf("line %d:%d: operator %s not defined for %s and %s",
-						n.Line, n.Pos, n.Data.(string), dTyp[DataInteger], dTyp[DataFloat])
+						n.Line, n.Pos, n.Data.(string), DTyp[DataInteger], DTyp[DataFloat])
 				}
 				*n = *c1
 				n.Data = res
@@ -269,7 +276,7 @@ func (n *Node) constantFolding() error {
 				}
 			default:
 				return fmt.Errorf("line %d:%d: operation %s not defined for %s and unknown",
-					n.Line, n.Pos, n.Data.(string), dTyp[DataInteger])
+					n.Line, n.Pos, n.Data.(string), DTyp[DataInteger])
 			}
 			return nil
 		}
@@ -298,7 +305,7 @@ func (n *Node) constantFolding() error {
 					res = a / b
 				default:
 					return fmt.Errorf("line %d:%d: operator %s not defined for %s and %s",
-						n.Line, n.Pos, n.Data.(string), dTyp[DataFloat], dTyp[DataInteger])
+						n.Line, n.Pos, n.Data.(string), DTyp[DataFloat], DTyp[DataInteger])
 				}
 				*n = *c0
 				n.Data = res
@@ -406,7 +413,7 @@ func (n *Node) constantFolding() error {
 				}
 			default:
 				return fmt.Errorf("line %d:%d: operation %s not defined for unknown and %s",
-					n.Line, n.Pos, n.Data.(string), dTyp[DataInteger])
+					n.Line, n.Pos, n.Data.(string), DTyp[DataInteger])
 			}
 		}
 	}
@@ -427,10 +434,10 @@ func (n *Node) constantFolding() error {
 				*n = *(n.Children[0])
 				n.Data = data
 			default:
-				return fmt.Errorf("unary operatior %s not defined for %s", n.Data.(string), dTyp[DataInteger])
+				return fmt.Errorf("unary operatior %s not defined for %s", n.Data.(string), DTyp[DataInteger])
 			}
 		} else if n.Children[0].Typ == FLOAT_DATA {
-			return fmt.Errorf("unary operatior %s not defined for %s", n.Data.(string), dTyp[DataFloat])
+			return fmt.Errorf("unary operatior %s not defined for %s", n.Data.(string), DTyp[DataFloat])
 		}
 	}
 

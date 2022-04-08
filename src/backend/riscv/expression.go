@@ -9,14 +9,14 @@ import (
 )
 
 // ---------------------
-// ----- Functions -----
+// ----- functions -----
 // ---------------------
 
 // TODO: set result of expression in a0, and operands for binary a0 and a1.
 
 // genExpression generates a binary or unary expression and returns a pointer to the register where the result is put.
 // An error is returned if something goes wrong.
-func genExpression(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *registerFile) (*register, error) {
+func genExpression(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *RegisterFile) (*register, error) {
 	if n.Data == nil {
 		// FUNCTION call.
 		return genFunctionCall(n, f, wr, st, rf)
@@ -106,7 +106,7 @@ func genExpression(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf
 
 // genExpressionInt generates an integer expression and returns a pointer to the register where the result is put.
 // An error is returned if the expression is not valid.
-func genExpressionInt(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *registerFile) (*register, error) {
+func genExpressionInt(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *RegisterFile) (*register, error) {
 	if len(n.Children) == 2 {
 		// Binary operator.
 		c1 := n.Children[0]
@@ -310,7 +310,7 @@ func genExpressionInt(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack,
 
 // genExpressionFloat generates a float expression and returns a pointer to the register where the result is put.
 // An error is returned if the expression is not valid.
-func genExpressionFloat(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *registerFile) (*register, error) {
+func genExpressionFloat(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *RegisterFile) (*register, error) {
 	if len(n.Children) == 2 {
 		c1 := n.Children[0]
 		c2 := n.Children[1]

@@ -7,7 +7,7 @@ import (
 )
 
 // genFunction generates a function. An error is returned if something went wrong.
-func genFunction(n *ir.Node, wr *util.Writer, st, ls *util.Stack, rf *registerFile) error {
+func genFunction(n *ir.Node, wr *util.Writer, st, ls *util.Stack, rf *RegisterFile) error {
 	name := n.Children[0].Data.(string)
 	//returnType := n.Children[1].Data.(string)
 	params := n.Children[2].Children // slice of typed variable lists.
@@ -81,7 +81,7 @@ func genFunction(n *ir.Node, wr *util.Writer, st, ls *util.Stack, rf *registerFi
 
 // genFunctionCall generates a call to a function and returns a pointer to the register where the result is put.
 // An error is returned if the function call is not valid.
-func genFunctionCall(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *registerFile) (*register, error) {
+func genFunctionCall(n *ir.Node, f *ir.Symbol, wr *util.Writer, st *util.Stack, rf *RegisterFile) (*register, error) {
 	// At this point we know that this call is valid and parameters match, because it has been previously verified.
 	name := n.Children[0].Data.(string)
 	args := n.Children[1].Children[0].Children // Arguments.

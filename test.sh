@@ -9,11 +9,15 @@ BUILD="./build"
 VSL="./resources/vsl_typed"
 SRC_FILES="$VSL/*.vsl"
 VSLC="$BUILD/vslc"
-THREADS=4
+TARGET="aarch64"
+declare -i FAILED=0
+declare -i PASSED=0
 
 echo "Typed VSL compiler test"
 
-# Check and verify the existence of folders and files.
+###############################################################
+##### Check and verify the existence of folders and files #####
+###############################################################
 
 if [ ! -d "$VSL" ];
 then
@@ -53,15 +57,14 @@ fi
 
 echo "Testing single threaded compiler"
 echo ""
-echo "Testing compiling LLVM IR ..."
+echo "Testing compiling using LLVM targeting $TARGET"
 for i1 in $SRC_FILES
 do
-  DST="$BUILD/$(basename "$i1" .vsl).ll"
-  echo "Compiling $i1 into LLVM IR"
-  touch "$DST"
+  DST="$BUILD/$(basename "$i1" .vsl)"
+  echo "Compiling $i1 using LLVM IR and backend"
 
-  # Compile VSL into LLVM ir.
-  $VSLC -ll "$i1" > "$DST"
+  # Compile VSL into executable using LLVM backend.
+  $VSLC -ll -target aarch64 -o "$DST" "$i1" # > /dev/null # Redirect errors to /dev/null.
 
   if [ "$?" ];
   then
@@ -69,23 +72,13 @@ do
   else
     echo -e "\tFailed to compile $i1"
     rm "$DST"
-    continue
-  fi
-
-  # Assemble LLVM IR, but redirect output to /dev/null.
-  llc -o "-" "$DST" > /dev/null 2>&1
-
-  if [ "$?" ];
-  then
-    echo -e "\t$DST assembled successfully"
-  else
-    echo -e "\tFailed to assemble $DST"
-    rm "$DST"
+    FAILED=$((FAILED + 1))
     continue
   fi
 
   # Clean up build folder.
   rm "$DST"
+  PASSED=$((PASSED + 1))
 done
 
 echo ""
@@ -106,6 +99,7 @@ do
   else
     echo -e "\tFailed to compile $i1"
     rm "$DST"
+    FAILED=$((FAILED + 1))
     continue
   fi
 
@@ -120,12 +114,14 @@ do
   else
     echo -e "\tFailed to assemble $DST"
     rm "$DST"
+    FAILED=$((FAILED + 1))
     continue
   fi
 
   # Clean up build folder.
   rm "$DST"
   rm "$ELF"
+  PASSED=$((PASSED + 1))
 done
 
 echo ""
@@ -138,23 +134,34 @@ echo ""
 ##### Multi-thread tests #####
 ##############################
 
+# Test from 2 to 16 threads.
+for i1 in 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+do
+  echo ""
+  echo "Testing multi-threaded compiler running $i1 threads"
+  echo ""
+  echo "Testing compiling using LLVM IR and backend using $i1 threads ..."
+  echo ""
+  echo "Testing compiling RISC-V 64-bit assembly using $i1 threads ..."
+  echo ""
+  echo "Testing compiling RISC-V 32-bit assembly using $i1 threads ..."
+  echo ""
+  echo "Testing compiling ARM 64-bit assembly using $i1 threads ..."
+  echo ""
+done
+
+##############################
+##### Print test results #####
+##############################
+
 echo ""
-echo "Testing multi-threaded compiler running $THREADS threads"
-echo ""
-echo "Testing compiling LLVM IR ..."
-echo ""
-echo "Testing compiling RISC-V 64-bit assembly ..."
-echo ""
-echo "Testing compiling RISC-V 32-bit assembly ..."
-echo ""
-echo "Testing compiling ARM 64-bit assembly ..."
-echo ""
+echo "Tests complete!"
+echo "$PASSED tests passed, $FAILED tests failed."
 
 ###################
 ##### Cleanup #####
 ###################
 
-echo ""
 echo "Cleaning up ..."
 echo "Removing VSL compiler $VSLC"
 rm "$VSLC"
