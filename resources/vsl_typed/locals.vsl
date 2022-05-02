@@ -3,7 +3,7 @@
 
 var i,j,k int
 
-def nesting_scopes ( x, y, z ) int
+def nesting_scopes ( x, y, z int) int
 begin
     var a,b int
     var c,d int

@@ -1,0 +1,15 @@
+// This program tests casting int to float and vice versa.
+
+def casting(a, b int, c, d float) int
+begin
+    var e int
+    var f float
+    e := a + c
+    f := b + d
+    e := 3
+    f := foo(e, 0.3)
+    return 0
+end
+
+def foo(x, y float) float
+    return x*y

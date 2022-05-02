@@ -1,0 +1,19 @@
+// This sample program tests all four floating point arithmetic operators.
+
+def float_test(a, b float) int
+begin
+    var c float
+    c := a + b
+    print a, "+", b, "=", c
+    c := a - b
+    print a, "-", b, "=", c
+    c := a * b
+    print a, "*", b, "=", c
+    c := a / b
+    print a, "/", b, "=", c
+    c := 2.45
+    print "c is now a constant: ", c
+    c := 1
+    print "c is now a constant: ", c
+    return 0
+end

@@ -57,7 +57,7 @@ func Optimise(opt util.Options) error {
 				// This worker thread should do one residual job.
 				end++
 			}
-			
+
 			go func(start, end int, wg *sync.WaitGroup) {
 				defer wg.Done()
 				for _, e2 := range Root.Children[0].Children[start:end] {
@@ -121,7 +121,8 @@ func (n *Node) optimise() error {
 
 	// Look for optimisation option.
 	switch n.Typ {
-	case EXPRESSION_LIST, PRINT_LIST, VARIABLE_LIST, STATEMENT_LIST, GLOBAL_LIST, DECLARATION_LIST, ARGUMENT_LIST:
+	case EXPRESSION_LIST, PRINT_LIST, VARIABLE_LIST, STATEMENT_LIST, GLOBAL_LIST, DECLARATION_LIST, ARGUMENT_LIST,
+		PARAMETER_LIST:
 		n.flattenList()
 	case TYPED_VARIABLE_LIST:
 		// Move type data to this node and remove variable list.
@@ -196,9 +197,9 @@ func (n *Node) constantFolding() error {
 		// Check for two float expression.
 		if c0.Typ == FLOAT_DATA && c1.Typ == FLOAT_DATA {
 			// Both operands are floating point constants.
-			a := c0.Data.(float32)
-			b := c1.Data.(float32)
-			var res float32
+			a := c0.Data.(float64)
+			b := c1.Data.(float64)
+			var res float64
 			switch n.Data.(string) {
 			case "+":
 				res = a + b
@@ -226,9 +227,9 @@ func (n *Node) constantFolding() error {
 			// First operator is an integer constant.
 			switch c1.Typ {
 			case FLOAT_DATA:
-				a := float32(c0.Data.(int))
-				b := c1.Data.(float32)
-				var res float32
+				a := float64(c0.Data.(int))
+				b := c1.Data.(float64)
+				var res float64
 				// These optimisations will leave the result of the expression as float.
 				switch n.Data.(string) {
 				case "+":
@@ -287,9 +288,9 @@ func (n *Node) constantFolding() error {
 			// Replace multiply and division with left and right shift if possible.
 			switch c0.Typ {
 			case FLOAT_DATA:
-				a := c0.Data.(float32)
-				b := float32(c1.Data.(int))
-				var res float32
+				a := c0.Data.(float64)
+				b := float64(c1.Data.(int))
+				var res float64
 				switch n.Data.(string) {
 				case "+":
 					res = a + b
@@ -315,11 +316,11 @@ func (n *Node) constantFolding() error {
 					if c1.Data.(int) == 1 {
 						// Multiplication by identity integer.
 						*n = *(c0)
-					} else if b := bits.OnesCount(c1.Data.(uint)); b == 1 {
+					} else if b := bits.OnesCount(uint(c1.Data.(int))); b == 1 {
 						// Multiplication by integer that is power of 2.
 						n.Data = "<<"
 						c1.Data = b
-					} else if b == 2 && c1.Data.(uint)&0x1 == 0x1 && c0.Typ == IDENTIFIER_DATA {
+					} else if b == 2 && c1.Data.(int)&0x1 == 0x1 && c0.Typ == IDENTIFIER_DATA {
 						// Operator op1 is a power of 2 plus one.
 						//
 						// This i helpful when a = b * c, where
@@ -329,11 +330,11 @@ func (n *Node) constantFolding() error {
 
 						// Create a new expression.
 						exp := Node{
-							Typ:      EXPRESSION,
-							Line:     n.Line,
-							Pos:      n.Pos,
-							Data:     "+",
-							Entry:    nil,
+							Typ:  EXPRESSION,
+							Line: n.Line,
+							Pos:  n.Pos,
+							Data: "+",
+							//Entry:    nil,
 							Children: make([]*Node, 2),
 						}
 
@@ -358,11 +359,11 @@ func (n *Node) constantFolding() error {
 					if c1.Data.(int) == 1 {
 						// Division by identity integer.
 						*n = *(c0)
-					} else if b := bits.OnesCount(c1.Data.(uint)); b == 1 {
+					} else if b := bits.OnesCount(uint(c1.Data.(int))); b == 1 {
 						// Division by integer that is power of 2.
 						n.Data = ">>"
 						c1.Data = b
-					} else if b == 2 && c1.Data.(uint)&0x1 == 0x1 && c0.Typ == IDENTIFIER_DATA {
+					} else if b == 2 && c1.Data.(int)&0x1 == 0x1 && c0.Typ == IDENTIFIER_DATA {
 						// Operator op1 is a power of 2 plus one.
 						//
 						// This i helpful when a = b / c, where
@@ -372,11 +373,11 @@ func (n *Node) constantFolding() error {
 
 						// Create a new expression.
 						exp := Node{
-							Typ:      EXPRESSION,
-							Line:     n.Line,
-							Pos:      n.Pos,
-							Data:     "-",
-							Entry:    nil,
+							Typ:  EXPRESSION,
+							Line: n.Line,
+							Pos:  n.Pos,
+							Data: "-",
+							//Entry:    nil,
 							Children: make([]*Node, 2),
 						}
 
@@ -430,7 +431,7 @@ func (n *Node) constantFolding() error {
 				*n = *(n.Children[0])
 				n.Data = data
 			case "~":
-				data := int(bits.Reverse(n.Children[0].Data.(uint)))
+				data := int(bits.Reverse(uint(n.Children[0].Data.(int))))
 				*n = *(n.Children[0])
 				n.Data = data
 			default:

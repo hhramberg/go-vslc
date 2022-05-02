@@ -814,7 +814,7 @@ func genPrint(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, st *ut
 	frmt := b.CreateGlobalStringPtr(sb.String(), stringPrefix)
 	globals.Unlock()
 
-	// Append format string to arguments.
+	// Prepend format string to arguments.
 	args[0] = frmt
 
 	// Call printf.

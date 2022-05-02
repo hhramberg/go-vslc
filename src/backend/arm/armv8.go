@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
-	"vslc/src/backend/regfile"
 )
 
 import (
+	"vslc/src/backend/regfile"
 	"vslc/src/ir"
+	"vslc/src/ir/lir"
+	"vslc/src/ir/lir/types"
 	"vslc/src/util"
 )
 
@@ -24,17 +26,6 @@ type register struct {
 	size int // Size of register in bits (64 or 32).
 	idx  int // Index of register (0 = x0, 1 = x1, 4 = v4 etc.).
 	use  int // Counter of when this register was used. Lower value means a longer time has passed since last this register was used.
-}
-
-// registerFile defines a virtual register file during compilation time. It holds 32 integer and 32 floating point
-// registers per aarch64 ABI.
-type registerFile struct {
-	regi []register // General purpose integer registers of register file.
-	regf []register // Floating point registers of register file.
-	usei int        // Number of integer registers used since last function call. Used for detecting when to push registers to stack.
-	usef int        // Number of floating point registers used since last function call. Used for detecting when to push registers to stack.
-	seqi int        // Sequence number of integer register uses, for the LRU algorithm.
-	seqf int        // Sequence number of floating point register uses, for the LRU algorithm.
 }
 
 // RegisterFile defines a virtual register file during compilation time. It holds 32 integer and 32 floating point
@@ -57,8 +48,8 @@ const labelPrintfString = "_printf_fmt_string"   // Used by printf to print stri
 const labelPrintfNewline = "_printf_fmt_newline" // Used by printf to print strings.
 
 const (
-	i = ir.DataInteger // i indicates integer type. // TODO: Change to LIR Int?
-	f = ir.DataFloat   // f indicates floating point type. // TODO: Change to LIR Float?
+	i = types.Int   // i indicates integer type.
+	f = types.Float // f indicates floating point type.
 )
 
 const (
@@ -171,8 +162,24 @@ const (
 	sp = r30 + 1 // Stack pointer (bottom of stack frame).
 )
 
+const (
+	a0 = r0 + iota // a0 defines argument register 0 and return value register.
+	a1             // a1 defines argument register 1.
+	a2             // a2 defines argument register 2.
+	a3             // a3 defines argument register 3.
+	a4             // a4 defines argument register 4.
+	a5             // a5 defines argument register 5.
+	a6             // a6 defines argument register 6.
+	a7             // a7 defines argument register 7.
+)
+
+const (
+	load  = "ldr"
+	store = "str"
+)
+
 // -------------------
-// ----- globals -----
+// ----- Globals -----
 // -------------------
 
 // regi defines print friendly string representations of the general purpose integer registers.
@@ -206,43 +213,43 @@ var regi = [...]string{
 	"x26",
 	"x27",
 	"x28",
-	"x29",
-	"x30",
-	"SP",
+	"fp",
+	"lr",
+	"sp",
 }
 
 // regf defines print friendly string representations of the floating point registers.
 var regf = [...]string{
-	"v0",
-	"v1",
-	"v2",
-	"v3",
-	"v4",
-	"v5",
-	"v6",
-	"v7",
-	"v8",
-	"v9",
-	"v10",
-	"v12",
-	"v13",
-	"v14",
-	"v15",
-	"v16",
-	"v17",
-	"v18",
-	"v19",
-	"v20",
-	"v21",
-	"v22",
-	"v23",
-	"v24",
-	"v25",
-	"v26",
-	"v27",
-	"v28",
-	"v29",
-	"v30",
+	"d0",
+	"d1",
+	"d2",
+	"d3",
+	"d4",
+	"d5",
+	"d6",
+	"d7",
+	"d8",
+	"d9",
+	"d10",
+	"d12",
+	"d13",
+	"d14",
+	"d15",
+	"d16",
+	"d17",
+	"d18",
+	"d19",
+	"d20",
+	"d21",
+	"d22",
+	"d23",
+	"d24",
+	"d25",
+	"d26",
+	"d27",
+	"d28",
+	"d29",
+	"d30",
 }
 
 // wordSize defines the word size of the aarch64 architecture to generate.
@@ -264,7 +271,7 @@ var floatStrings = struct {
 // ---------------------
 
 // GenArm recursively generates ARM v8 (aarch64) assembler code from the intermediate representation.
-func GenArm(opt util.Options) error {
+func GenArm(opt util.Options, m *lir.Module, root *ir.Node) error {
 	// Generate .text section.
 	wr := util.NewWriter()
 	defer wr.Close()
@@ -280,7 +287,7 @@ func GenArm(opt util.Options) error {
 	if opt.Threads > 1 {
 		// Parallel.
 		t := opt.Threads
-		l := len(ir.Funcs.F)
+		l := len(m.Functions())
 		if t > l {
 			t = l
 		}
@@ -307,8 +314,8 @@ func GenArm(opt util.Options) error {
 				wr := util.NewWriter()
 				defer wr.Close()
 
-				for _, e1 := range ir.Funcs.F[start:end] {
-					if err := genFunction(e1, &wr, opt); err != nil {
+				for _, e1 := range m.Functions()[start:end] {
+					if err := genFunction(e1, &wr); err != nil {
 						cerr <- err
 					}
 				}
@@ -320,44 +327,43 @@ func GenArm(opt util.Options) error {
 		wg.Wait()
 	} else {
 		// Sequential.
-		for _, e1 := range ir.Funcs.F {
-			if err := genFunction(e1, &wr, opt); err != nil {
+		for _, e1 := range m.Functions() {
+			if err := genFunction(e1, &wr); err != nil {
 				return err
 			}
 		}
 	}
 
 	// Generate main function.
-	var callee *ir.Symbol
-	rf := CreateRegisterFile()
-
 	// Find first defined function, which will be called implicitly from main.
-	for _, e1 := range ir.Root.Children {
+	var callee *lir.Function
+	for _, e1 := range root.Children {
 		if e1.Typ == ir.FUNCTION {
-			callee = e1.Entry
+			if callee = m.GetFunction(e1.Children[0].Data.(string)); callee == nil {
+				return errors.New("no functions defined for module")
+			}
 			break
 		}
 	}
+	rf := CreateRegisterFile()
 
 	// Generate implicit main function for program entry.
-	if err := genMain(&rf, callee, &wr); err != nil {
+	if err := genMain(rf, m, callee, &wr); err != nil {
 		return err
 	}
 
 	// Generate global data.
-	wr.Write("\t.data\n")
-	for _, v := range ir.Global.HT {
-		if v.Typ == ir.SymGlobal {
-			wr.Label(v.Name)
-			// Write globals with initial values 0. VSL doesn't support variable initialisation on declaration.
-			wr.Write("\t.xword\t0\n")
-		}
+	wr.Write("\n\t.data\n")
+	for _, e1 := range m.Globals() {
+		wr.Label(e1.Name())
+		// Write globals with initial values 0. VSL doesn't support variable initialisation on declaration.
+		wr.Write("\t.xword\t0x0\n")
 	}
 
 	// Generate string data.
-	for i1, e1 := range ir.Strings.St {
-		wr.Label(fmt.Sprintf("%s%d", labelString, i1))
-		wr.Write("\t.asciz\t%q\n", e1)
+	for _, e1 := range m.Strings() {
+		wr.Label(e1.Name())
+		wr.Write("\t.asciz\t%q\n", e1.Value())
 	}
 
 	// Generate float constant data.
@@ -379,257 +385,16 @@ func GenArm(opt util.Options) error {
 	return nil
 }
 
-// gen generates aarch64 assembler recursively. An error is returned if something went wrong.
-func gen(n *ir.Node, fun *ir.Symbol, rf *registerFile, wr *util.Writer, st, ls *util.Stack) error {
-	switch n.Typ {
-	case ir.BLOCK:
-		scope := ir.SymTab{HT: make(map[string]*ir.Symbol, 16)}
-		st.Push(&scope.HT)
-		for _, e1 := range n.Children {
-			if err := gen(e1, fun, rf, wr, st, ls); err != nil {
-				st.Pop()
-				return err
-			}
-		}
-		st.Pop()
-	case ir.EXPRESSION:
-		if _, err := genExpression(n, rf, wr, st); err != nil {
-			return err
-		}
-	case ir.IF_STATEMENT:
-		if err := genIf(n, fun, rf, wr, st, ls); err != nil {
-			return err
-		}
-	case ir.WHILE_STATEMENT:
-		if err := genWhile(n, fun, rf, wr, st, ls); err != nil {
-			return err
-		}
-	//case ir.DECLARATION: // Allocated during function head and globals generation.
-	case ir.NULL_STATEMENT:
-		if err := genContinue(wr, ls); err != nil {
-			return err
-		}
-	case ir.ASSIGNMENT_STATEMENT:
-		if err := genAssignment(n, rf, wr, st); err != nil {
-			return err
-		}
-	case ir.PRINT_STATEMENT:
-		if err := genPrint(n, rf, wr, st); err != nil {
-			return err
-		}
-	case ir.RETURN_STATEMENT:
-		if err := genReturn(n, fun, rf, wr, st); err != nil {
-			return err
-		}
-	default:
-		for _, e1 := range n.Children {
-			if err := gen(e1, fun, rf, wr, st, ls); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// genAssignment generates aarch64 assembler for assigning a value to a named variable.
-func genAssignment(n *ir.Node, rf *registerFile, wr *util.Writer, st *util.Stack) error {
-	name := n.Children[0].Data.(string)
-	c2 := n.Children[1]
-
-	switch c2.Typ {
-	case ir.INTEGER_DATA:
-		r := rf.lruI()
-		if err := genLoadImmToRegister(c2.Data.(int), r, wr); err != nil {
-			return err
-		}
-		if err := storeIdentifier(r, name, rf, wr, st); err != nil {
-			return err
-		}
-	case ir.FLOAT_DATA:
-		floatStrings.Lock()
-		idx := len(floatStrings.s)
-		floatStrings.s = append(floatStrings.s, fmt.Sprintf("%x", c2.Data.(float64)))
-		floatStrings.Unlock()
-		r := rf.lruF()
-		wr.Write("\tldr\t%s, %s%d\n", r.String(), labelFloat, idx)
-		if err := storeIdentifier(r, name, rf, wr, st); err != nil {
-			return err
-		}
-	case ir.EXPRESSION:
-		r, err := genExpression(c2, rf, wr, st)
-		if err != nil {
-			return err
-		}
-		if err = storeIdentifier(r, name, rf, wr, st); err != nil {
-			return err
-		}
-	case ir.IDENTIFIER_DATA:
-		r, err := loadIdentifier(c2.Data.(string), rf, wr, st)
-		if err != nil {
-			return err
-		}
-		if err = storeIdentifier(r, name, rf, wr, st); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("compiler error: expected node type INTEGER_DATA, FLOAT_DATA, EXPRESSIO or IDENTIFIER, got %s",
-			c2.Type())
-	}
-	return nil
-}
-
-// loadIdentifier loads an identifier from local scopes, function parameters or global scope. If the identifier isn't
-// found, an error is returned. The identifier value is loaded into the register pointed to by the returned register
-// pointer.
-func loadIdentifier(name string, rf *registerFile, wr *util.Writer, st *util.Stack) (*register, error) {
-	// Check local scopes and function parameters.
-	for i1 := 1; i1 < st.Size(); i1++ {
-		e1 := st.Get(i1)
-		if e1 == nil {
-			return nil, errors.New("compiler error: scope stack is malformed")
-		}
-		scope := e1.(*map[string]*ir.Symbol)
-		ident, ok := (*scope)[name]
-		if !ok {
-			continue
-		}
-
-		// Found identifier, calculate offset from FP.
-		offset := -(wordSize * 2)            // FP and LR
-		offset -= wordSize * (ident.Seq + 1) // Offset within function's defined variables.
-
-		// Check variables datatype.
-		var r *register
-		if ident.DataTyp == i {
-			// Integer variable.
-			r = rf.lruI()
-		} else {
-			// Floating point variable.
-			r = rf.lruF()
-		}
-
-		// Load from stack to register r.
-		wr.Write("\tldr\t%s, [%s, #%d]\n", r.String(), regi[fp], offset)
-		return r, nil
-	}
-
-	// Check globals.
-	g := st.Get(st.Size())
-	if g == nil {
-		return nil, errors.New("compiler error: scope stack is malformed")
-	}
-	glob := g.(*map[string]*ir.Symbol)
-	ident, ok := (*glob)[name]
-	if !ok {
-		return nil, fmt.Errorf("undeclared identifier %s", name)
-	}
-
-	var r *register
-	if ident.DataTyp == i {
-		// Integer variable.
-		r = rf.lruI()
-	} else {
-		// Floating point variable.
-		r = rf.lruF()
-	}
-
-	// Load from data segment to register r.
-	wr.Write("\tldr\t%s, =%s\n", r.String(), ident.Name)
-	return r, nil
-}
-
-// storeIdentifier stores the contents of register r to the identifier with the given name. An error is returned if
-// something went wrong. Floats being stored to integer variables are cast to integer before store.
-func storeIdentifier(r *register, name string, rf *registerFile, wr *util.Writer, st *util.Stack) error {
-	// Check local scopes and function parameters.
-	for i1 := 1; i1 < st.Size(); i1++ {
-		e1 := st.Get(i1)
-		if e1 == nil {
-			return errors.New("compiler error: scope stack is malformed")
-		}
-		scope := e1.(*map[string]*ir.Symbol)
-		ident, ok := (*scope)[name]
-		if !ok {
-			continue
-		}
-
-		if r.typ == f && ident.DataTyp != r.typ {
-			// Cast float to integer.
-			tmp := rf.lruI()
-			wr.Write("\tscvtf\t%s, %s\n", tmp.String(), r.String())
-			r = tmp
-		}
-
-		// Found identifier, calculate offset from FP.
-		offset := -(wordSize * 2)            // FP and LR
-		offset -= wordSize * (ident.Seq + 1) // Offset within function's defined variables.
-
-		// Store register r to stack.
-		wr.Write("\tstr\t%s, [%s, #%d]\n", r.String(), regi[fp], offset)
-		return nil
-	}
-
-	// Check globals.
-	g := st.Get(st.Size())
-	if g == nil {
-		return errors.New("compiler error: scope stack is malformed")
-	}
-	glob := g.(map[string]*ir.Symbol)
-	ident, ok := glob[name]
-	if !ok {
-		return fmt.Errorf("undeclared identifier %s", name)
-	}
-
-	// Store register r in data segment.
-	wr.Write("\tstr\t%s, =%s\n", r.String(), ident.Name)
-	return nil
-}
-
-// genLoadImmToRegister generates a load of a signed integer imm to the destination register r.
-func genLoadImmToRegister(imm int, r *register, wr *util.Writer) error {
-	if imm >= minImm && imm <= maxImm {
-		wr.Write("\tmov\t%s, #%d\n", r.String(), imm)
-		return nil
-	}
-	if imm&0xFFFF == imm {
-		// Can do with 16-bit move.
-		wr.Write("\tmovz\t%s, #%d\n", r.String(), imm&0x000000000000FFFF)
-		return nil
-	}
-	if imm&0xFFFFFFFF == imm {
-		// Can do with 32-bit move.
-		wr.Write("\tmovz\t%s, #%d\n", r.String(), imm&0x000000000000FFFF)
-		wr.Write("\tmovk\t%s, #%d, lsl 16\n", r.String(), imm&0x00000000FFFF0000)
-		return nil
-	}
-	if r.size != bitSize64 {
-		return errors.New("trying to load a 64-bit value into a 32-bit register")
-	}
-	if imm&0xFFFFFFFFFFFF == imm {
-		// Can do with 48-bit move.
-		wr.Write("\tmovz\t%s, #%d\n", r.String(), imm&0x000000000000FFFF)
-		wr.Write("\tmovk\t%s, #%d, lsl 16\n", r.String(), imm&0x00000000FFFF0000)
-		wr.Write("\tmovk\t%s, #%d, lsl 32\n", r.String(), imm&0x0000FFFF00000000)
-		return nil
-	}
-	// Must do 64-bit move.
-	wr.Write("\tmovz\t%s, #%d\n", r.String(), imm&0x000000000000FFFF)
-	wr.Write("\tmovk\t%s, #%d, lsl 16\n", r.String(), imm&0x00000000FFFF0000)
-	wr.Write("\tmovk\t%s, #%d, lsl 32\n", r.String(), imm&0x0000FFFF00000000)
-	wr.Write("\tmovk\t%s, #%d, lsl 48\n", r.String(), uint(imm)&0xFFFF000000000000)
-	return nil
-}
-
 // genMain generates an implicit main function that checks input command-line arguments and calls the function callee.
 // After the function callee returns the main function exits the program with the return value of the call to callee.
 // If the return value of callee is a floating point value, the value is cast to integer.
-func genMain(rf *registerFile, callee *ir.Symbol, wr *util.Writer) error {
+func genMain(rf RegisterFile, m *lir.Module, callee *lir.Function, wr *util.Writer) error {
 	wr.Write("\n")
 	wr.Label(labelMain)
 
 	nf, ni := 0, 0 // Number of floating point and integer parameters respectively.
-	for _, e1 := range callee.Params {
-		if e1.DataTyp == i {
+	for _, e1 := range callee.Params() {
+		if e1.DataType() == i {
 			ni++
 		} else {
 			nf++
@@ -665,22 +430,18 @@ func genMain(rf *registerFile, callee *ir.Symbol, wr *util.Writer) error {
 
 	// Check parameter count and argc.
 	wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regi[r0].String(), rf.SP().String(), sa-wordSize) // This is bloated, but it's idiomatic to load argc from the stack.
-	wr.Write("\tcmp\t%s, #%d\n", rf.regi[r0].String(), callee.Nparams+1)                    // First argument is application path.
+	wr.Write("\tcmp\t%s, #%d\n", rf.regi[r0].String(), len(callee.Params())+1)              // First argument is application path.
 	wr.Write("\tb.eq\t%s\n", largcok)
 
 	// argc is not ok.
-	idx := len(ir.Strings.St)
-	ir.Strings.St = append(
-		ir.Strings.St,
-		fmt.Sprintf("Argument error: expected %d arguments, got %%d\n", callee.Nparams),
-	)
+	errstr := callee.CreateGlobalString(fmt.Sprintf("Argument error: expected %d arguments, got %%d\n", len(callee.Params())))
 
 	// Load argc - 1 into r1. It's safe to overwrite r1, because we're not going to use it.
 	wr.Write("\tsub\t%s, %s, #%d\n", rf.regi[r1].String(), rf.regi[r0].String(), 1)
 
 	// Load format string and call printf.
-	wr.Write("\tadrp\t%s, %s%d\n", rf.regi[r0].String(), labelString, idx)
-	wr.Write("\tadd\t%s, %s, :lo12:%s%d\n", rf.regi[r0].String(), rf.regi[r0].String(), labelString, idx)
+	wr.Write("\tadrp\t%s, %s\n", rf.regi[r0].String(), errstr.Name())
+	wr.Write("\tadd\t%s, %s, :lo12:%s\n", rf.regi[r0].String(), rf.regi[r0].String(), errstr.Name())
 	wr.Write("\tbl\tprintf\n")
 
 	// Set return code and return.
@@ -695,18 +456,18 @@ func genMain(rf *registerFile, callee *ir.Symbol, wr *util.Writer) error {
 	fi := 0           // Number of floating point arguments.
 	fzero := false    // Set to true if the label for floating point zero has been generated.
 	var flabel string // Label for loading the float constant 0.0.
-	var argvreg *register
+	var argvreg regfile.Register
 	if ni > 0 {
 		// Use r8 instead of r0 for argv pointer. r0 is already assigned a parameter.
-		argvreg = &rf.regi[r8]
+		argvreg = rf.GetI(r8)
 	} else {
-		argvreg = &rf.regi[r0]
+		argvreg = rf.GetI(r0)
 	}
-	for i1, e1 := range callee.Params {
+	for i1, e1 := range callee.Params() {
 		// Move char pointer to r0. Increment r1 to next string.
 		wr.Write("\tldr\t%s, [%s, #%d]\n", argvreg.String(), rf.SP().String(), sa-wordSize<<1) // Load argv into r8.
 
-		if e1.DataTyp == i {
+		if e1.DataType() == i {
 			// Parse argv[i1] as int.
 
 			// Run atoi.
@@ -721,7 +482,7 @@ func genMain(rf *registerFile, callee *ir.Symbol, wr *util.Writer) error {
 				wr.Write("\tmov\t%s, %s\n", rf.regi[r0].String(), rf.regi[ii].String())
 			} else {
 				// Store parameter on stack.
-				wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regi[r0].String(), rf.LR(), -(spill + wordSize*e1.Seq))
+				wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regi[r0].String(), rf.LR(), -(spill + wordSize*i1))
 			}
 			ii++
 		} else {
@@ -736,7 +497,7 @@ func genMain(rf *registerFile, callee *ir.Symbol, wr *util.Writer) error {
 			wr.Write("\tbl\tatof\n")
 
 			// Check return value of atof. 0.0 means string isn't a float. Cannot parse "0.0", because atof is stupid.
-			loadFloatToRegister(flabel, &rf.regf[v1], wr) // Move 0.0 into v1.
+			loadFloatToRegister(flabel, rf.GetF(v1), wr) // Move 0.0 into v1.
 			wr.Write("\tfcmp\t%s, %s\n", rf.regf[v0].String(), rf.regf[v1].String())
 			wr.Write("\tmov\t%s, #%d\n", rf.regi[r1].String(), i1+1) // Hack the printf by moving parameter index to r1. Wastes one cycle.
 			wr.Write("\tb.eq\t%s\n", largverr)                       // Got error from atof, branch to argverror.
@@ -745,7 +506,7 @@ func genMain(rf *registerFile, callee *ir.Symbol, wr *util.Writer) error {
 				wr.Write("\tmov\t%s, %s\n", rf.regf[v0].String(), rf.regf[fi].String())
 			} else {
 				// Store parameter on stack.
-				wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regf[v0].String(), rf.LR(), -(spill + wordSize*e1.Seq))
+				wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regf[v0].String(), rf.LR(), -(spill + wordSize*i1))
 			}
 			fi++
 		}
@@ -760,15 +521,12 @@ func genMain(rf *registerFile, callee *ir.Symbol, wr *util.Writer) error {
 
 	// argv errors jump here.
 	wr.Label(largverr)
-	idx = len(ir.Strings.St)
-	ir.Strings.St = append(
-		ir.Strings.St,
-		"Argument error: argument %d is either not int or float\n",
-	)
+	idx := len(m.Strings())
+	errstr = callee.CreateGlobalString(fmt.Sprintf("Argument error: argument %d is either not int or float\n", idx))
 
 	// Load format string and call printf.
-	wr.Write("\tadrp\t%s, %s%d\n", rf.regi[r0].String(), labelString, idx)
-	wr.Write("\tadd\t%s, %s, :lo12:%s%d\n", rf.regi[r0].String(), rf.regi[r0].String(), labelString, idx)
+	wr.Write("\tadrp\t%s, %s%d\n", rf.regi[r0].String(), errstr.Name())
+	wr.Write("\tadd\t%s, %s, :lo12:%s%d\n", rf.regi[r0].String(), rf.regi[r0].String(), errstr.Name())
 	wr.Write("\tbl\tprintf\n")
 
 	// Set return code and return.
@@ -778,10 +536,10 @@ func genMain(rf *registerFile, callee *ir.Symbol, wr *util.Writer) error {
 
 	// Go here when ready to call callee.
 	wr.Label(lcall)
-	wr.Write("\tbl\t%s\n", callee.Name)
+	wr.Write("\tbl\t%s\n", callee.Name())
 
 	// Move float result from v0 to r0 if necessary.
-	if callee.DataTyp == f {
+	if callee.DataType() == f {
 		wr.Write("\tfcvts\t%s, %s\n", rf.regf[v0].String(), rf.regi[r0].String())
 	}
 
@@ -791,32 +549,7 @@ func genMain(rf *registerFile, callee *ir.Symbol, wr *util.Writer) error {
 	return nil
 }
 
-// CreateRegisterFile creates an aarch64 register file with 32 general purpose integer registers and 32 floating point
-// register of configuration specific width.
-// TODO: Delete.
-func CreateRegisterFile() registerFile {
-	rf := registerFile{
-		regi: make([]register, 32),
-		regf: make([]register, 32),
-	}
-
-	// Initiate registers.
-	for i1 := range rf.regi {
-		rf.regi[i1] = register{
-			typ:  i,
-			size: bitSize,
-			idx:  i1,
-		}
-		rf.regf[i1] = register{
-			typ:  f,
-			size: bitSize,
-			idx:  i1,
-		}
-	}
-	return rf
-}
-
-func CreateRegisterFile2() RegisterFile {
+func CreateRegisterFile() RegisterFile {
 	rf := RegisterFile{
 		regi: make([]regfile.Register, 32),
 		regf: make([]regfile.Register, 32),
@@ -825,12 +558,12 @@ func CreateRegisterFile2() RegisterFile {
 	// Initiate registers.
 	for i1 := range rf.regi {
 		rf.regi[i1] = &register{
-			typ:  i,
+			typ:  int(types.Int),
 			size: bitSize,
 			idx:  i1,
 		}
 		rf.regf[i1] = &register{
-			typ:  f,
+			typ:  int(types.Float),
 			size: bitSize,
 			idx:  i1,
 		}
@@ -850,7 +583,7 @@ func floatToGlobalString(fl float64) string {
 }
 
 // loadFloatToRegisters generates aarch64 assembler for loading an existing float label into register r.
-func loadFloatToRegister(label string, r *register, wr *util.Writer) {
+func loadFloatToRegister(label string, r regfile.Register, wr *util.Writer) {
 	wr.Write("\tadrp\t%s, %s\n", r.String(), label)
 	wr.Write("\tadd\t%s, %s, :lo12:%s\n", r.String(), r.String(), label)
 }
@@ -861,7 +594,7 @@ func loadFloatToRegister(label string, r *register, wr *util.Writer) {
 
 // String returns the assembler string of the register.
 func (r register) String() string {
-	if r.typ == i {
+	if r.typ == int(i) {
 		return regi[r.idx]
 	}
 	return regf[r.idx]
@@ -895,152 +628,6 @@ func (r register) Free() {
 // ---------------------------------
 // ----- Register file methods -----
 // ---------------------------------
-
-// lruI uses the least recently used first algorithm to select a temporary integer register for use.
-func (rf *registerFile) lruI() *register {
-	res := &rf.regi[0]
-
-	// TODO: Add stack buffering for saturated register file.
-
-	// Check argument registers.
-	for _, e1 := range rf.regi[:r8] {
-		if e1.use < res.use {
-			res = &e1
-		}
-	}
-
-	// Check block 1 temporary registers.
-	for _, e1 := range rf.regi[r9:r18] {
-		if e1.use < res.use {
-			res = &e1
-		}
-	}
-
-	// Check block 2 temporary registers.
-	for _, e1 := range rf.regi[r19:] {
-		if e1.use < res.use {
-			res = &e1
-		}
-	}
-	rf.usei++
-	res.use = rf.seqi
-	rf.seqi++
-	return res
-}
-
-// lruINoArg is the same as lruI, but doesn't return argument registers r0-r7.
-func (rf *registerFile) lruINoArg() *register {
-	res := &rf.regi[r9]
-
-	// TODO: Add stack buffering for saturated register file.
-
-	// Check block 1 temporary registers.
-	for _, e1 := range rf.regi[r9:r18] {
-		if e1.use < res.use {
-			res = &e1
-		}
-	}
-
-	// Check block 2 temporary registers.
-	for _, e1 := range rf.regi[r19:] {
-		if e1.use < res.use {
-			res = &e1
-		}
-	}
-	rf.usei++
-	res.use = rf.seqi
-	rf.seqi++
-	return res
-}
-
-// lruF uses the least recently used first algorithm to select a temporary floating point register for use.
-func (rf *registerFile) lruF() *register {
-	res := &rf.regf[0]
-
-	// TODO: Add stack buffering for saturated register file.
-
-	// Check all registers. Floating point registers are all general purpose.
-	for _, e1 := range rf.regf {
-		if e1.use < res.use {
-			res = &e1
-		}
-	}
-	rf.usef++
-	res.use = rf.seqf
-	rf.seqf++
-	return res
-}
-
-// lruFNoArg is the same as lruF, but doesn't return argument registers v0-v7.
-func (rf *registerFile) lruFNoArg() *register {
-	res := &rf.regf[v8]
-
-	// TODO: Add stack buffering for saturated register file.
-
-	// Check all registers. Floating point registers are all general purpose.
-	for _, e1 := range rf.regf[v9:] {
-		if e1.use < res.use {
-			res = &e1
-		}
-	}
-	rf.usef++
-	res.use = rf.seqf
-	rf.seqf++
-	return res
-}
-
-// GetI returns integer register with index i.
-func (rf registerFile) GetI(i int) *register {
-	if i < 0 || i > len(rf.regi) {
-		return nil
-	}
-	return &rf.regi[i]
-}
-
-// GetF returns floating point register with index i.
-func (rf registerFile) GetF(i int) *register {
-	if i < 0 || i > len(rf.regf) {
-		return nil
-	}
-	return &rf.regf[i]
-}
-
-// GetNextTempI returns the next available integer register that hasn't been allocated yet.
-// If no registers are vacant, <nil> is returned.
-func (rf registerFile) GetNextTempI() *register {
-	for i1, e1 := range rf.regi {
-		if !e1.Used() {
-			return &rf.regi[i1]
-		}
-	}
-	return nil
-}
-
-// GetNextTempF returns the next available floating point register that hasn't been allocated yet.
-// If no registers are vacant, <nil> is returned.
-func (rf registerFile) GetNextTempF() *register {
-	for i1, e1 := range rf.regf {
-		if !e1.Used() {
-			return &rf.regf[i1]
-		}
-	}
-	return nil
-}
-
-// SP returns a pointer to the register file's stack pointer.
-func (rf registerFile) SP() *register {
-	return &rf.regi[sp]
-}
-
-// FP returns a pointer to the register file's frame pointer.
-func (rf registerFile) FP() *register {
-	return &rf.regi[fp]
-}
-
-// LR returns a pointer to the register file's link register.
-func (rf registerFile) LR() *register {
-	return &rf.regi[lr]
-}
 
 // GetI returns integer register with index i.
 func (rf RegisterFile) GetI(i int) regfile.Register {
@@ -1088,7 +675,9 @@ func (rf RegisterFile) GetNextTempF() regfile.Register {
 // not in the exclusion list. If no registers are vacant, <nil> is returned.
 func (rf RegisterFile) GetNextTempIExclude(exc []regfile.Register) regfile.Register {
 	// Use r8-28. Registers r19-28 are callee-saved.
-	for i1, e1 := range rf.regi[r8:r29] {
+	// Exclude r28, because it may be used for register spilling.
+	// TODO: Confirm the use of excluding register 28.
+	for i1, e1 := range rf.regi[r8:r28] {
 		for _, e2 := range exc {
 			if e2.Id() == e1.(*register).Id() && e2.Type() == ir.DataInteger {
 				// Register already in use by neighbour.
@@ -1102,10 +691,12 @@ func (rf RegisterFile) GetNextTempIExclude(exc []regfile.Register) regfile.Regis
 	return nil
 }
 
-// GetNextTempF returns the next available floating point register that hasn't been allocated yet and is
+// GetNextTempFExclude returns the next available floating point register that hasn't been allocated yet and is
 // not in the exclusion list. If no registers are vacant, <nil> is returned.
 func (rf RegisterFile) GetNextTempFExclude(exc []regfile.Register) regfile.Register {
 	// Use v8-31. Registers v8-15 are callee-saved.
+	// Exclude v31 because of saving one register for register spilling.
+	// TODO: Confirm use of v31 for register spilling.
 	for i1, e1 := range rf.regf[v8:] {
 		for _, e2 := range exc {
 			if e2.Id() == e1.(*register).Id() && e2.Type() == ir.DataFloat {

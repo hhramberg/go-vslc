@@ -15,7 +15,7 @@ type Node struct {
 	Line     int         // Line in source code Node is declared.
 	Pos      int         // Position on the line in source code Node is declared.
 	Data     interface{} // Data node is holding: used for strings, number data and identifier data.
-	Entry    *Symbol     // Symbol table entry for this node, if it exists.
+	//Entry    *Symbol     // Symbol table entry for this node, if it exists.
 	Children []*Node     // Children of this node that constitutes its local sub-tree.
 }
 
@@ -111,17 +111,11 @@ func (n *Node) String() string {
 
 	switch n.Typ {
 	case STRING_DATA:
-		if n.Entry == nil {
-			// BEFORE syntax table creation. Get string data from node.
-			return fmt.Sprintf("%s [%q]", nt[n.Typ], n.Data)
-		} else {
-			// AFTER syntax table creation. Get string data from global string table.
-			return fmt.Sprintf("%s [%s]", nt[n.Typ], Strings.St[n.Data.(int)])
-		}
+		return fmt.Sprintf("%s [%q]", nt[n.Typ], n.Data)
 	case INTEGER_DATA:
 		return fmt.Sprintf("%s [%d]", nt[n.Typ], n.Data)
-	//case IDENTIFIER_DATA:
-	//	return fmt.Sprintf("%s [%q] bound: %t", nt[n.Typ], n.Data, n.Entry != nil)
+	case FLOAT_DATA:
+		return fmt.Sprintf("%s [%f]", nt[n.Typ], n.Data)
 	default:
 		return fmt.Sprintf("%s [%q]", nt[n.Typ], n.Data)
 	}

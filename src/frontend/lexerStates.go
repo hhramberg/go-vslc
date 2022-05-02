@@ -93,6 +93,7 @@ func lexNumber(l *lexer) stateFunc {
 		}
 		l.backup()
 		l.emit(FLOAT)
+		return lexGlobal
 	}
 	l.backup()
 	l.emit(INTEGER)

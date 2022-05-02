@@ -10,139 +10,143 @@ import (
 // ----- Type definitions -----
 // ----------------------------
 
-// Function represents a function. It has a name, return datatype, parameters and instructions.
-// using a function as a Value is the same as calling the function.
+// Function defines an LIR function.
 type Function struct {
-	m         *Module        // Parent module. Used for requesting sequence numbers.
-	id        int            // Unique identifier assigned to this function.
-	name      string         // Optional name of function.
-	typ       types.DataType // Return type of function.
-	params    []*Param       // Parameters of function.
-	variables []Value        // All declared variables in function body. Used for calculating stack.
-	blocks    []*Block       // Basic blocks in function body.
-	seq       int            // Sequence number for generating unique identifiers for all children of function.
+	m         *Module               // m is the Module that owns this Function.
+	id        int                   // id is the unique identifier of this instruction in function body.
+	name      string                // name defines the unique string name of function.
+	typ       types.DataType        // typ defines the return types.DataType of the function.
+	blocks    []*Block              // blocks defines the function body's basic blocks.
+	params    []*Param              // params defines the functions parameters.
+	variables []*DeclareInstruction // variables holds all the locally defined variables of the function's body.
+	seq       int                   // seq defines the locally unique sequence identifier for all children of Function.
+	vseq      int                   // vseq defines the unique sequence number for local variables of the Function.
+	en        bool                  // Set to true if instruction is enabled.
 }
 
-// Param represents a function parameter. A parameter has a name and a datatype. Using a parameter as a Value
-// is equal to using any other, non-global, memory allocated variable.
+// Param defines an LIR Function parameter.
 type Param struct {
-	f    *Function      // Parent function.
-	id   int            // Unique identifier of parameter.
-	name string         // Optional name of parameter.
-	typ  types.DataType // Data type of parameter.
-	wr   interface{}    // Register Interference Graph (RIG) wrapper node.
+	f       *Function      // f is the Function that owns this parameter.
+	id      int            // id is the unique function local id of the parameter.
+	name    string         // name is the string identifier name given to this parameter.
+	typ     types.DataType // typ is the data type of the parameter.
+	styp    types.DataType // styp defines the subtype data type of arrays.
+	operand Value          // Used for **argv.
+	hw      interface{}    // hw defines the instruction's hardware allocated register. Usually set to argument register 0-7.
+	en      bool           // Set to true if instruction is enabled.
+}
+
+// FunctionCallInstruction defines an LIR function call.
+type FunctionCallInstruction struct {
+	b         *Block      // b is the basic block element that owns this instruction.
+	id        int         // id is the unique identifier of this instruction in function body.
+	target    *Function   // target points to the target Function to call.
+	arguments []Value     // arguments provides the arguments to pass to the Function during the call.
+	hw        interface{} // hw defines the instruction's hardware allocated register. Usually set to argument register 0.
+	en        bool        // Set to true if instruction is enabled.
 }
 
 // ---------------------
 // ----- Constants -----
 // ---------------------
 
-// labelParamPrefix defines the Param types name prefix.
-const labelParamPrefix = "p"
+// labelFunction is the prefix for all textual LIR functions.
+const labelFunction = "function"
 
 // -------------------
-// ----- globals -----
+// ----- Globals -----
 // -------------------
 
 // ---------------------
-// ----- functions -----
+// ----- Functions -----
 // ---------------------
 
-// ----------------------------
-// ----- Function methods -----
-// ----------------------------
-
-// Id returns the unique sequence number assigned to Function f when it was created.
+// Id returns the unique id of the FunctionCallInstruction.
 func (f *Function) Id() int {
 	return f.id
 }
 
-// Name returns the given name of Function f, if any, or the assigned unique label and sequence id concatenation.
+// Name returns the textual representation of the virtual register Value of the FunctionCallInstruction.
 func (f *Function) Name() string {
 	return f.name
 }
 
-// Type returns the types.Function data object type.
-func (f *Function) Type() types.Type {
-	return types.Function
-}
-
-// DataType returns the data type value of Function f, either types.Int or types.Float.
+// DataType returns the DataType of the declared variable that was loaded.
 func (f *Function) DataType() types.DataType {
 	return f.typ
 }
 
 // String returns the textual LIR representation of Function f.
 func (f *Function) String() string {
-	// Function header.
 	sb := strings.Builder{}
-	sb.WriteString(fmt.Sprintf("function %s(", f.name))
-	for i1, e1 := range f.params {
-		sb.WriteString(e1.String())
-		if i1 < len(f.params)-1 {
-			sb.WriteString(", ")
+	sb.WriteString(labelFunction)
+	sb.WriteRune(' ')
+	sb.WriteString(f.name)
+	sb.WriteRune('(')
+	if len(f.params) > 0 {
+		for i1, e1 := range f.params {
+			sb.WriteString(e1.String())
+			if i1 < len(f.params)-1 {
+				sb.WriteString(", ")
+			}
 		}
 	}
-	sb.WriteString(fmt.Sprintf("): %s", f.DataType().String()))
+	sb.WriteString("): ")
+	sb.WriteString(f.typ.String())
 
+	// Append function body.
 	if len(f.blocks) > 0 {
 		sb.WriteString(" {\n")
-		// Function body.
+		for _, e1 := range f.variables {
+			sb.WriteRune('\t')
+			sb.WriteString(e1.String())
+			sb.WriteRune('\n')
+		}
 		for _, e1 := range f.blocks {
 			sb.WriteString(e1.String())
+			sb.WriteRune('\n')
 		}
 		sb.WriteRune('}')
 	}
 	return sb.String()
 }
 
-// Blocks returns the basic blocks of Function f.
+// Blocks returns Function f's basic blocks.
 func (f *Function) Blocks() []*Block {
 	return f.blocks
 }
 
-// CreateBlock creates a new Block for Function f.
-func (f *Function) CreateBlock() *Block {
-	b := &Block{
-		f:            f,
-		id:           f.m.getId(),
-		term:         nil,
-		instructions: make([]Value, 0, 16),
-	}
-	f.blocks = append(f.blocks, b)
-	return b
+// Params returns Function f's slice of parameters.
+func (f *Function) Params() []*Param {
+	return f.params
 }
 
-// CreateParamInt creates and adds an integer parameter to Function f.
-func (f *Function) CreateParamInt(name string) *Param {
-	param := &Param{
-		f:   f,
-		id:  f.getId(),
-		typ: types.Int,
-	}
-	if len(name) < 1 {
-		param.name = fmt.Sprintf("%s%d", labelParamPrefix, param.id)
-	}
-	f.params = append(f.params, param)
-	return param
+// Locals returns Function f's slice of locally declared variables.
+func (f *Function) Locals() []*DeclareInstruction {
+	return f.variables
 }
 
-// CreateParamFloat creates and adds a floating point parameter to Function f.
-func (f *Function) CreateParamFloat(name string) *Param {
-	param := &Param{
-		f:   f,
-		id:  f.getId(),
-		typ: types.Float,
+// CreateParam creates a new parameter for Function f.
+func (f *Function) CreateParam(name string, typ types.DataType) *Param {
+	if len(name) < 0 {
+		panic("no name given for parameter")
 	}
-	if len(name) < 1 {
-		param.name = fmt.Sprintf("%s%d", labelDataPrefix, param.id)
+	if p := f.GetParam(name); p != nil {
+		panic(fmt.Sprintf("duplicate declaration: parameter %s already defined for function %s",
+			name, f.name))
 	}
-	f.params = append(f.params, param)
-	return param
+	p := &Param{
+		f:    f,
+		id:   f.getId(),
+		name: name,
+		typ:  typ,
+		en:   true,
+	}
+	f.params = append(f.params, p)
+	return p
 }
 
-// GetParam returns the parameter with given name, if it exists. If Function f does not have a parameter with the
-// given name, nil is returned.
+// GetParam returns the named parameter of Function f, if it exists. If it does not exist, <nil> is returned.
 func (f *Function) GetParam(name string) *Param {
 	for _, e1 := range f.params {
 		if e1.name == name {
@@ -152,82 +156,182 @@ func (f *Function) GetParam(name string) *Param {
 	return nil
 }
 
-// getId returns a unique identifer for any child of Function f.
+// CreateBlock creates a new basic block and appends it to the Function f.
+func (f *Function) CreateBlock() *Block {
+	b := &Block{
+		f:            f,
+		id:           f.m.getId(),
+		instructions: make([]Value, 0, 16),
+		term:         nil,
+	}
+	f.blocks = append(f.blocks, b)
+	return b
+}
+
+// CreateGlobalString creates and returns a global string.
+func (f *Function) CreateGlobalString(s string) *String {
+	return f.m.CreateGlobalString(s)
+}
+
+// getId returns a function local unique identifier.
 func (f *Function) getId() int {
 	id := f.seq
 	f.seq++
 	return id
 }
 
-// -------------------------
-// ----- Param methods -----
-// -------------------------
-
-// Id returns the unique sequence number assigned to Param p when it was created.
-func (p *Param) Id() int {
-	return p.id
+// getVSeq returns a unique variable sequence number which defines the variables position
+// on stack.
+func (f *Function) getVSeq() int {
+	seq := f.vseq
+	f.vseq++
+	return seq
 }
 
-// Name returns the given name, if any, or the assigned unique label and sequence id concatenation.
-func (p *Param) Name() string {
-	return p.name
+// ---------------------
+// ----- Parameter -----
+// ---------------------
+
+// Id returns the unique id of the Param.
+func (inst *Param) Id() int {
+	return inst.id
 }
 
-// Type returns the types.Param data object type.
-func (p *Param) Type() types.Type {
+// Name returns the textual representation of the virtual register Value of the Param.
+func (inst *Param) Name() string {
+	return inst.name
+}
+
+// Type returns the constant identifying this instruction as a Param.
+func (inst *Param) Type() types.InstructionType {
 	return types.Param
 }
 
-// DataType returns the data type value of Param p, either types.Int or types.Float.
-func (p *Param) DataType() types.DataType {
-	return p.typ
+// DataType returns the DataType of the declared variable that was loaded.
+func (inst *Param) DataType() types.DataType {
+	return inst.typ
 }
 
-// String returns the textual LIR representation of Param p.
-func (p *Param) String() string {
-	return fmt.Sprintf("%s: %s", p.name, p.DataType().String())
+// String returns the textual LIR representation of the Param.
+func (inst *Param) String() string {
+	return fmt.Sprintf("%s: %s", inst.name, inst.typ.String())
 }
 
-// Has2Operands returns false for Param, because params don't have operands.
-func (p Param) Has2Operands() bool {
-	return false
+// SetHW panics for the Param, because it's a memory value, not a virtual register.
+func (inst *Param) SetHW(hw interface{}) {
+	inst.hw = hw
 }
 
-// Has1Operand returns false for Param, because params don't have operands.
-func (p Param) Has1Operand() bool {
-	return false
+// GetHW returns <nil> for the Param.
+func (inst *Param) GetHW() interface{} {
+	return inst.hw
 }
 
-// GetOperand1 panics when called on Param, because params aren't computed.
-func (p Param) GetOperand1() Value {
-	panic("param does not have operands")
+// Operand1 panics for the Param.
+func (inst *Param) Operand1() Value {
+	return inst.operand
 }
 
-// GetOperand2 panics when called on Param, because params aren't computed.
-func (p Param) GetOperand2() Value {
-	panic("param does not have operands")
+// Operand2 panics for the Param.
+func (inst *Param) Operand2() Value {
+	panic("Param does not have a operands")
 }
 
-// SetHW doesn't do anything for Param, but is implemented to support interface Value.
-func (p Param) SetHW(r interface{}) {
+// Enable enables the instruction, resulting in that it will be printed using Module.String.
+func (inst *Param) Enable() {
+	inst.en = true
 }
 
-// GetHW returns nil, because Param resides in memory.
-func (p Param) GetHW() interface{} {
-	panic("param is a memory data object, it doesn't reside in registers")
+// Disable disables the instruction, resulting in that it won't be printed using Module.String.
+func (inst *Param) Disable() {
+	inst.en = false
 }
 
-// SetWrapper sets the wrapper for this instruction during register allocation.
-func (p Param) SetWrapper(wr interface{}) {
-	p.wr = wr
+// IsEnabled returns true if the instruction is enabled.
+func (inst *Param) IsEnabled() bool {
+	return inst.en
 }
 
-// GetWrapper sets the wrapper for this instruction during register allocation.
-func (p Param) GetWrapper() interface{} {
-	return p.wr
+// -------------------------
+// ----- Function call -----
+// -------------------------
+
+// Id returns the unique id of the FunctionCallInstruction.
+func (inst *FunctionCallInstruction) Id() int {
+	return inst.id
 }
 
-// IsConstant returns false for Param.
-func (d *Param) IsConstant() bool {
-	return false
+// Name returns the textual representation of the virtual register Value of the FunctionCallInstruction.
+func (inst *FunctionCallInstruction) Name() string {
+	return fmt.Sprintf("%s%d", labelDataInstruction, inst.id)
+}
+
+// Type returns the constant identifying this instruction as a FunctionCallInstruction.
+func (inst *FunctionCallInstruction) Type() types.InstructionType {
+	return types.FunctionCallInstruction
+}
+
+// DataType returns the DataType of the declared variable that was loaded.
+func (inst *FunctionCallInstruction) DataType() types.DataType {
+	return inst.target.DataType()
+}
+
+// String returns the textual LIR representation of the FunctionCallInstruction.
+func (inst *FunctionCallInstruction) String() string {
+	sb := strings.Builder{}
+	for i1, e1 := range inst.arguments {
+		sb.WriteString(e1.Name())
+		if i1 < len(inst.arguments)-1 {
+			sb.WriteRune(',')
+			sb.WriteRune(' ')
+		}
+	}
+	return fmt.Sprintf("%s = call %s(%s)", inst.Name(), inst.target.Name(), sb.String())
+}
+
+// SetHW panics for the FunctionCallInstruction, because it's a memory value, not a virtual register.
+func (inst *FunctionCallInstruction) SetHW(hw interface{}) {
+	inst.hw = hw
+}
+
+// GetHW returns <nil> for the FunctionCallInstruction.
+func (inst *FunctionCallInstruction) GetHW() interface{} {
+	return inst.hw
+}
+
+// Operand1 returns <nil> for the FunctionCallInstruction.
+func (inst *FunctionCallInstruction) Operand1() Value {
+	return &VaList{
+		vars: inst.arguments,
+	}
+}
+
+// Operand2 returns <nil> for the FunctionCallInstruction.
+func (inst *FunctionCallInstruction) Operand2() Value {
+	return nil
+}
+
+// Enable enables the instruction, resulting in that it will be printed using Module.String.
+func (inst *FunctionCallInstruction) Enable() {
+	inst.en = true
+}
+
+// Disable disables the instruction, resulting in that it won't be printed using Module.String.
+func (inst *FunctionCallInstruction) Disable() {
+	inst.en = false
+}
+
+// IsEnabled returns true if the instruction is enabled.
+func (inst *FunctionCallInstruction) IsEnabled() bool {
+	return inst.en
+}
+
+// Target returns a pointer to the Function being called.
+func (inst *FunctionCallInstruction) Target() *Function {
+	return inst.target
+}
+
+// Arguments returns a slice of the function call arguments.
+func (inst *FunctionCallInstruction) Arguments() []Value {
+	return inst.arguments
 }

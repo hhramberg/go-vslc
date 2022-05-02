@@ -10,139 +10,62 @@ import (
 // ----- Type definitions -----
 // ----------------------------
 
-// Block defines a basic block. A basic block is a sequence of instructions that is terminated by a branch instruction.
+// Block defines a basic block. A basic block is a sequence of instructions. The Block is terminated by a single
+// branch instruction, be it a function call, unconditional jump, conditional jump, or return statement.
 type Block struct {
-	f            *Function // Parent function that owns the basic block.
-	id           int       // Unique identifier of basic block.
-	term         Value     // Branch instruction or return instruction.
-	instructions []Value   // Instructions in the basic block.
+	f            *Function // f is the Function that owns the Block.
+	id           int       // id is th unique global identifier of the block.
+	instructions []Value   // instructions holds all the instructions defined for the Block.
+	term         Value     // term defines the terminating instruction of the Block.
 }
 
 // ---------------------
 // ----- Constants -----
 // ---------------------
 
-// labelBlockPrefix defines the textual LIR representation of a basic block label.
-const labelBlockPrefix = "block"
-
-// labelAllocPrefix defines the textual LIR representation of a declaration label.
-const labelAllocPrefix = "var"
+// labelBlock is the prepended string prefix for textual LIR block names.
+const labelBlock = "block"
 
 // -------------------
-// ----- globals -----
+// ----- Globals -----
 // -------------------
 
 // ---------------------
-// ----- functions -----
+// ----- Functions -----
 // ---------------------
 
-// Id returns the uniquely assigned identifier of Block b.
-func (b *Block) Id() int {
-	return b.id
-}
-
-// Name returns the textual LIR label name of Block b.
+// Name returns the LIR textual name of the Block.
 func (b *Block) Name() string {
-	return fmt.Sprintf("%s%d", labelBlockPrefix, b.id)
+	return fmt.Sprintf("%s%d", labelBlock, b.id)
 }
 
-// Type returns the LIR object type of Block b.
-func (b *Block) Type() types.Type {
-	return types.Block
-}
-
-// String returns the textual LIR representation of all instructions in Block b.
+// String returns the LIR textual representation of the Block b.
 func (b *Block) String() string {
 	sb := strings.Builder{}
-	sb.WriteString(fmt.Sprintf("%s%d:\n", labelBlockPrefix, b.id))
-	for _, e1 := range b.instructions {
-		sb.WriteRune('\t')
-		sb.WriteString(e1.String())
-		sb.WriteRune('\n')
+	sb.WriteString(fmt.Sprintf("%s:\n", b.Name()))
+
+	// Append instructions.
+	for i1, e1 := range b.instructions {
+		if e1.IsEnabled() {
+			sb.WriteRune('\t')
+			sb.WriteString(e1.String())
+			if i1 < len(b.instructions)-1 {
+				sb.WriteRune('\n')
+			}
+		}
 	}
-	if b.term == nil {
-		sb.WriteString(fmt.Sprintf("// Error: basic block %s is not terminated. Terminate using return statement or branch statement.\n",
-			b.Name()))
+	if b.term == nil || !b.term.IsEnabled() {
+		panic(
+			fmt.Sprintf("%s is not terminated. Terminate using unconditional or conditional jump, function call or return and enable the terminating instruction",
+				b.Name()),
+		)
 	}
 	return sb.String()
 }
 
-// Instructions returns the instructions of the basic Block b.
-func (b *Block) Instructions() []*Value {
-	res := make([]*Value, len(b.instructions))
-	for i1 := range b.instructions {
-		res[i1] = &(b.instructions[i1])
-	}
-	return res
-}
-
-// ------------------------------
-// ----- Branch instruction -----
-// ------------------------------
-
-// CreateConditionalBranch creates a conditional branch of type IF-THEN-ELSE. Even though you may want a simple IF-THEN
-// branch, it is still required to perform a branch, which means that two subsequent asic blocks are required.
-// The conditional branch instructions perform a sub instruction (op1 - op2) and performs a check of the result to
-// zero.
-func (b *Block) CreateConditionalBranch(op types.LogicalOperation, op1, op2 Value, thn *Block, els *Block) *BranchInstruction {
-	if types.Equal < op || op > types.LessThanOrEqual {
-		panic(fmt.Sprintf("function %s, block %s: unexpected logic operation %d",
-			b.f.Name(), b.Name(), op))
-	}
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateConditionalBranch",
-			op1.Type().String()))
-	}
-	if op2.Type() != types.Data && op2.Type() != types.Load {
-		panic(fmt.Sprintf("operand 2 is not a value, cannot use %s as input to CreateConditionalBranch",
-			op2.Type().String()))
-	}
-	cmp := b.CreateSub(op1, op2)
-	br := &BranchInstruction{
-		b:    b,
-		id:   b.f.getId(),
-		typ:  types.Conditional,
-		op:   op,
-		next: thn,
-		els:  els,
-		val:  cmp,
-	}
-	br.name = fmt.Sprintf("cond%d", br.id)
-	b.instructions = append(b.instructions, br)
-	b.term = br
-	return br
-}
-
-// CreateBranch creates an unconditional branch instruction, effectively terminating Block b.
-func (b *Block) CreateBranch(dst *Block) *BranchInstruction {
-	br := &BranchInstruction{
-		b:    b,
-		id:   b.f.getId(),
-		typ:  types.Unconditional,
-		next: dst,
-	}
-	br.name = fmt.Sprintf("jump%d", br.id)
-	b.instructions = append(b.instructions, br)
-	b.term = br
-	return br
-}
-
-// CreateReturn creates a return instruction, effectively terminating Block b.
-func (b *Block) CreateReturn(val Value) *BranchInstruction {
-	if val.Type() != types.Data && val.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateReturn",
-			val.Type().String()))
-	}
-	br := &BranchInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		typ: types.Return,
-		val: val,
-	}
-	br.name = fmt.Sprintf("ret%d", br.id)
-	b.instructions = append(b.instructions, br)
-	b.term = br
-	return br
+// Instructions returns Block b's slice of instructions.
+func (b *Block) Instructions() []Value {
+	return b.instructions
 }
 
 // ---------------------------------
@@ -151,271 +74,308 @@ func (b *Block) CreateReturn(val Value) *BranchInstruction {
 
 // CreateConstantInt creates an integer constant.
 func (b *Block) CreateConstantInt(i int) *Constant {
-	c := &Constant{
+	inst := &Constant{
+		b:   b,
 		id:  b.f.getId(),
 		typ: types.Int,
 		val: i,
+		en:  true,
 	}
-	c.name = fmt.Sprintf("%s%d", labelDataPrefix, c.id)
-	b.instructions = append(b.instructions, c)
-	return c
+	inst.name = fmt.Sprintf("%s%d", labelDataInstruction, inst.id)
+	b.instructions = append(b.instructions, inst)
+	b.f.m.constants = append(b.f.m.constants, inst) // Append to Module's slice of constants.
+	return inst
 }
 
 // CreateConstantFloat creates a floating point constant.
 func (b *Block) CreateConstantFloat(f float64) *Constant {
-	c := &Constant{
+	inst := &Constant{
+		b:   b,
 		id:  b.f.getId(),
 		typ: types.Float,
 		val: f,
+		en:  true,
 	}
-	c.name = fmt.Sprintf("%s%d", labelDataPrefix, c.id)
-	b.instructions = append(b.instructions, c)
-	return c
+	inst.name = fmt.Sprintf("%s%d", labelDataInstruction, inst.id)
+	b.instructions = append(b.instructions, inst)
+	b.f.m.constants = append(b.f.m.constants, inst) // Append to Module's slice of constants.
+	return inst
 }
 
-// -----------------------------------
-// ----- Arithmetic instructions -----
-// -----------------------------------
+// -----------------------------
+// ----- Cast instructions -----
+// -----------------------------
 
-// CreateAdd creates an add instruction. The resulting DataInstruction = op1 + op2.
+// CreateIntToFloat casts a types.Int Value into a types.Float Value.
+func (b *Block) CreateIntToFloat(v Value) *CastInstruction {
+	if v.Type() != types.DataInstruction && v.Type() != types.LoadInstruction &&
+		v.Type() != types.Constant && v.Type() != types.FunctionCallInstruction &&
+		v.Type() != types.CastInstruction {
+		panic(fmt.Sprintf("can't create data cast from %s", v.Type().String()))
+	}
+	inst := &CastInstruction{
+		b:   b,
+		id:  b.f.getId(),
+		typ: types.Float,
+		src: v,
+		en:  true,
+	}
+	b.instructions = append(b.instructions)
+	return inst
+}
+
+// CreateFloatToInt casts a types.Float Value into a types.Int Value.
+func (b *Block) CreateFloatToInt(v Value) *CastInstruction {
+	if v.Type() != types.DataInstruction && v.Type() != types.LoadInstruction &&
+		v.Type() != types.Constant && v.Type() != types.FunctionCallInstruction &&
+		v.Type() != types.CastInstruction {
+		panic(fmt.Sprintf("can't create data cast from %s", v.Type().String()))
+	}
+	inst := &CastInstruction{
+		b:   b,
+		id:  b.f.getId(),
+		typ: types.Int,
+		src: v,
+		en:  true,
+	}
+	b.instructions = append(b.instructions)
+	return inst
+}
+
+// -----------------------------
+// ----- Data instructions -----
+// -----------------------------
+
+// CreateAdd creates an LIR add instruction and puts the result in the returned virtual register.
+// Result = op1 + op2
 func (b *Block) CreateAdd(op1, op2 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateAdd",
-			op1.Type().String()))
-	}
-	if op2.Type() != types.Data && op2.Type() != types.Load {
-		panic(fmt.Sprintf("operand 2 is not a value, cannot use %s as input to CreateAdd",
-			op2.Type().String()))
-	}
-	inst := &DataInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		op:  types.Add,
-		op1: op1,
-		op2: op2,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
+	return b.createArithmeticInstruction(types.Add, op1, op2)
 }
 
-// CreateSub creates a subtraction instruction. The resulting DataInstruction = op1 - op2.
+// CreateSub creates an LIR sub instruction and puts the result in the returned virtual register.
+// Result = op1 - op2
 func (b *Block) CreateSub(op1, op2 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateSub",
-			op1.Type().String()))
-	}
-	if op2.Type() != types.Data && op2.Type() != types.Load {
-		panic(fmt.Sprintf("operand 2 is not a value, cannot use %s as input to CreateSub",
-			op2.Type().String()))
-	}
-	inst := &DataInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		op:  types.Subtract,
-		op1: op1,
-		op2: op2,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
+	return b.createArithmeticInstruction(types.Sub, op1, op2)
 }
 
-// CreateMul creates a multiplication instruction. The resulting DataInstruction = op1 * op2.
+// CreateMul creates an LIR sub instruction and puts the result in the returned virtual register.
+// Result = op1 * op2
 func (b *Block) CreateMul(op1, op2 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateMul",
-			op1.Type().String()))
-	}
-	if op2.Type() != types.Data && op2.Type() != types.Load {
-		panic(fmt.Sprintf("operand 2 is not a value, cannot use %s as input to CreateMul",
-			op2.Type().String()))
-	}
-	inst := &DataInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		op:  types.Multiply,
-		op1: op1,
-		op2: op2,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
+	return b.createArithmeticInstruction(types.Mul, op1, op2)
 }
 
-// CreateDiv creates a division instruction. The resulting DataInstruction = op1 / op2.
+// CreateDiv creates an LIR div instruction and puts the result in the returned virtual register.
+// Result = op1 / op2
 func (b *Block) CreateDiv(op1, op2 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateDiv",
-			op1.Type().String()))
+	if op2.Type() == types.Constant {
+		if op2.DataType() == types.Int {
+			if op2.(*Constant).val.(int) == 0 {
+				panic(fmt.Sprintf("division by zero: constant %s", op2.Name()))
+			}
+		} else {
+			if op2.(*Constant).val.(float64) == 0.0 {
+				panic(fmt.Sprintf("division by zero: constant %s", op2.Name()))
+			}
+		}
 	}
-	if op2.Type() != types.Data && op2.Type() != types.Load {
-		panic(fmt.Sprintf("operand 2 is not a value, cannot use %s as input to CreateDiv",
-			op2.Type().String()))
-	}
-	inst := &DataInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		op:  types.Division,
-		op1: op1,
-		op2: op2,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
+	return b.createArithmeticInstruction(types.Mul, op1, op2)
 }
 
-// CreateRem creates a remainder/modulus instruction. The resulting DataInstruction = op1 % op2.
+// CreateRem creates an LIR rem instruction and puts the result in the returned virtual register.
+// Result = op1 % op2
 func (b *Block) CreateRem(op1, op2 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateRem",
-			op1.Type().String()))
+	if op2.Type() == types.Constant {
+		if op2.DataType() == types.Int {
+			if op2.(*Constant).val.(int) == 0 {
+				panic(fmt.Sprintf("division by zero: constant %s", op2.Name()))
+			}
+		} else {
+			if op2.(*Constant).val.(float64) == 0.0 {
+				panic(fmt.Sprintf("division by zero: constant %s", op2.Name()))
+			}
+		}
 	}
-	if op2.Type() != types.Data && op2.Type() != types.Load {
-		panic(fmt.Sprintf("operand 2 is not a value, cannot use %s as input to CreateRem",
-			op2.Type().String()))
-	}
-	inst := &DataInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		op:  types.Remainder,
-		op1: op1,
-		op2: op2,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
+	return b.createArithmeticInstruction(types.Rem, op1, op2)
 }
 
-// CreateLShift creates a left shift instruction. The resulting DataInstruction = op1 << op2.
+// CreateLShift creates an LIR left shift instruction and puts the result in the returned virtual register.
+// Result = op1 << op2
 func (b *Block) CreateLShift(op1, op2 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateLShift",
-			op1.Type().String()))
-	}
-	if op2.Type() != types.Data && op2.Type() != types.Load {
-		panic(fmt.Sprintf("operand 2 is not a value, cannot use %s as input to CreateLShift",
-			op2.Type().String()))
-	}
-	inst := &DataInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		op:  types.LeftShift,
-		op1: op1,
-		op2: op2,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
+	return b.createArithmeticInstruction(types.LShift, op1, op2)
 }
 
-// CreateRShift creates a right shift instruction. The resulting DataInstruction = op1 >> op2.
+// CreateRShift creates an LIR right shift instruction and puts the result in the returned virtual register.
+// Result = op1 >> op2
 func (b *Block) CreateRShift(op1, op2 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateRShift",
-			op1.Type().String()))
-	}
-	if op2.Type() != types.Data && op2.Type() != types.Load {
-		panic(fmt.Sprintf("operand 2 is not a value, cannot use %s as input to CreateRShift",
-			op2.Type().String()))
-	}
-	inst := &DataInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		op:  types.RightShift,
-		op1: op1,
-		op2: op2,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
+	return b.createArithmeticInstruction(types.RShift, op1, op2)
 }
 
-// CreateXOR creates a bitwise XOR instruction. The resulting DataInstruction = op1 ^ op2.
-func (b *Block) CreateXOR(op1, op2 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateXOR",
-			op1.Type().String()))
-	}
-	if op2.Type() != types.Data && op2.Type() != types.Load {
-		panic(fmt.Sprintf("operand 2 is not a value, cannot use %s as input to CreateXOR",
-			op2.Type().String()))
-	}
-	inst := &DataInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		op:  types.Xor,
-		op1: op1,
-		op2: op2,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
+// CreateAnd creates an LIR arithmetic and instruction and puts the result in the returned virtual register.
+// Result = op1 & op2
+func (b *Block) CreateAnd(op1, op2 Value) *DataInstruction {
+	return b.createArithmeticInstruction(types.And, op1, op2)
 }
 
-// CreateOR creates a bitwise OR instruction. The resulting DataInstruction = op1 | op2.
-func (b *Block) CreateOR(op1, op2 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateOR",
-			op1.Type().String()))
-	}
-	if op2.Type() != types.Data && op2.Type() != types.Load {
-		panic(fmt.Sprintf("operand 2 is not a value, cannot use %s as input to CreateOR",
-			op2.Type().String()))
-	}
-	inst := &DataInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		op:  types.Or,
-		op1: op1,
-		op2: op2,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
+// CreateXor creates an LIR arithmetic XOR instruction and puts the result in the returned virtual register.
+// Result = op1 ^ op2
+func (b *Block) CreateXor(op1, op2 Value) *DataInstruction {
+	return b.createArithmeticInstruction(types.Xor, op1, op2)
 }
 
-// CreateAND creates a bitwise AND instruction. The resulting DataInstruction = op1 & op2.
-func (b *Block) CreateAND(op1, op2 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateAND",
-			op1.Type().String()))
-	}
-	if op2.Type() != types.Data && op2.Type() != types.Load {
-		panic(fmt.Sprintf("operand 2 is not a value, cannot use %s as input to CreateAND",
-			op2.Type().String()))
-	}
-	inst := &DataInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		op:  types.And,
-		op1: op1,
-		op2: op2,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
+// CreateOr creates an LIR arithmetic OR instruction and puts the result in the returned virtual register.
+// Result = op1 | op2
+func (b *Block) CreateOr(op1, op2 Value) *DataInstruction {
+	return b.createArithmeticInstruction(types.Or, op1, op2)
 }
 
-// CreateNOT creates a bitwise NOT instruction. The resulting DataInstruction = ~op1.
-func (b *Block) CreateNOT(op1 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateNOT",
-			op1.Type().String()))
-	}
-	inst := &DataInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		op:  types.Not,
-		op1: op1,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
-}
-
-// CreateNeg creates an arithmetic negate instruction. The resulting DataInstruction = -op1.
+// CreateNeg creates an LIR neg instruction and puts the result in the returned virtual register.
+// Result = -op1
 func (b *Block) CreateNeg(op1 Value) *DataInstruction {
-	if op1.Type() != types.Data && op1.Type() != types.Load {
-		panic(fmt.Sprintf("operand 1 is not a value, cannot use %s as input to CreateNeg",
-			op1.Type().String()))
+	return b.createArithmeticInstruction(types.Neg, op1, nil)
+}
+
+// CreateNot creates an LIR not instruction and puts the result in the returned virtual register.
+// Result = ~op1
+func (b *Block) CreateNot(op1 Value) *DataInstruction {
+	return b.createArithmeticInstruction(types.Not, op1, nil)
+}
+
+// createArithmeticInstruction creates an arithmetic data instruction with the given operator and operands.
+// The method panics if an error occurs.
+func (b *Block) createArithmeticInstruction(op types.ArithmeticOperation, op1, op2 Value) *DataInstruction {
+	if op1.Type() != types.DataInstruction && op1.Type() != types.Constant && op1.Type() != types.LoadInstruction && op1.Type() != types.FunctionCallInstruction {
+		panic(fmt.Sprintf("cannot use value %s of type %s as operand", op1.Name(), op1.Type().String()))
 	}
+	if op < types.Neg {
+		if op2 == nil {
+			panic("second operand is <nil>")
+		}
+		if op2.Type() != types.DataInstruction && op2.Type() != types.Constant && op2.Type() != types.LoadInstruction && op2.Type() != types.FunctionCallInstruction {
+			panic(fmt.Sprintf("cannot use value %s of type %s, as operand for arithmetic instruction", op2.Name(), op2.Type().String()))
+		}
+	}
+	if op1.DataType() != op2.DataType() {
+		// Cast datatype. Prefer float over int.
+		if op1.DataType() == types.Int {
+			op1 = b.CreateIntToFloat(op1)
+		} else {
+			op2 = b.CreateIntToFloat(op2)
+		}
+	}
+
+	// Verify that the expression is allowed with the given operator.
+	if !expLut[op1.DataType()][op2.DataType()][op] {
+		panic(fmt.Sprintf("invalid operator %s with operands %s (%s) and %s (%s)",
+			op.String(), op1.Name(), op1.DataType().String(), op2.Name(), op2.DataType().String()))
+	}
+
+	// Create, append and return the expression.
 	inst := &DataInstruction{
 		b:   b,
 		id:  b.f.getId(),
-		op:  types.Neg,
+		op:  op,
 		op1: op1,
+		op2: op2,
+		en:  true,
 	}
 	b.instructions = append(b.instructions, inst)
+	return inst
+}
+
+// CreateFunctionCall creates an LIR function call of the provided target function using the provided parameters.
+// Result = target(arguments ...)
+func (b *Block) CreateFunctionCall(target *Function, arguments []Value) *FunctionCallInstruction {
+	if target == nil {
+		panic("no target function provided, target function is <nil>")
+	}
+
+	if len(target.params) != len(arguments) {
+		panic(fmt.Sprintf("expected %d arguments, got %d", len(target.params), len(arguments)))
+	}
+
+	inst := &FunctionCallInstruction{
+		b:         b,
+		id:        b.f.getId(),
+		target:    target,
+		arguments: arguments,
+		en:        true,
+	}
+	b.instructions = append(b.instructions, inst)
+	return inst
+}
+
+// -------------------------------
+// ----- Branch instructions -----
+// -------------------------------
+
+// CreateBranch creates an unconditional branch to the target branch. This method terminates the Block b.
+func (b *Block) CreateBranch(target *Block) *BranchInstruction {
+	if b.term != nil {
+		panic(fmt.Sprintf("basic block %s is already terminated", b.Name()))
+	}
+	if target == nil {
+		panic("cannot create jump: target bock is <nil>")
+	}
+	inst := &BranchInstruction{
+		b:   b,
+		id:  b.f.getId(),
+		thn: target,
+		en:  true,
+	}
+	b.instructions = append(b.instructions, inst)
+	b.term = inst
+	return inst
+}
+
+// CreateConditionalBranch creates a conditional branch (if-then-else) to the target branch. This method terminates
+// the Block b. The thn Block is taken if the Value rel is not equal to 0, else the els Block is taken.
+func (b *Block) CreateConditionalBranch(op types.RelationalOperation, op1, op2 Value, thn, els *Block) *BranchInstruction {
+	if b.term != nil {
+		panic(fmt.Sprintf("basic block %s is already terminated", b.Name()))
+	}
+	if thn == nil {
+		panic("cannot create jump: target then bock is <nil>")
+	}
+	if els == nil {
+		panic("cannot create jump: target else bock is <nil>")
+	}
+	if op1.Type() != types.DataInstruction && op1.Type() != types.Constant && op1.Type() != types.LoadInstruction && op1.Type() != types.FunctionCallInstruction {
+		panic(fmt.Sprintf("cannot use value %s as compare operand", op1.Name()))
+	}
+	if op2.Type() != types.DataInstruction && op2.Type() != types.Constant && op2.Type() != types.LoadInstruction && op2.Type() != types.FunctionCallInstruction {
+		panic(fmt.Sprintf("cannot use value %s as compare operand", op2.Name()))
+	}
+	if op > types.GreaterThanOrEqual {
+		panic(fmt.Sprintf("undefined relational operator: %d", op))
+	}
+	inst := &BranchInstruction{
+		b:   b,
+		id:  b.f.getId(),
+		thn: thn,
+		els: els,
+		op1: op1,
+		op2: op2,
+		op:  op,
+		en:  true,
+	}
+	b.instructions = append(b.instructions, inst)
+	b.term = inst
+	return inst
+}
+
+// CreateReturn creates a return statement. This method terminates Block b.
+func (b *Block) CreateReturn(val Value) *ReturnInstruction {
+	if val.Type() != types.DataInstruction && val.Type() != types.Constant && val.Type() != types.LoadInstruction && val.Type() != types.FunctionCallInstruction {
+		panic(fmt.Sprintf("cannot use value %s as return value", val.Name()))
+	}
+	inst := &ReturnInstruction{
+		b:   b,
+		id:  b.f.getId(),
+		val: val,
+		en:  true,
+	}
+	b.instructions = append(b.instructions, inst)
+	b.term = inst
 	return inst
 }
 
@@ -423,80 +383,174 @@ func (b *Block) CreateNeg(op1 Value) *DataInstruction {
 // ----- Memory instructions -----
 // -------------------------------
 
-// CreateDeclareInt creates a new types.Int variable on the stack.
-func (b *Block) CreateDeclareInt(name string) *DeclareInstruction {
-	inst := &DeclareInstruction{
+// CreateStore creates a StoreInstruction given a source virtual register and a destination variable.
+// The source virtual register must be either DataInstruction, LoadInstruction or FunctionCallInstruction.
+// The destination must be a Global, Param or Local instruction type.
+func (b *Block) CreateStore(src, dst Value) *StoreInstruction {
+	if src.Type() != types.DataInstruction && src.Type() != types.Constant && src.Type() != types.LoadInstruction &&
+		src.Type() != types.FunctionCallInstruction && src.Type() != types.CastInstruction {
+		panic(fmt.Sprintf("cannot create %s: source type %s not allowed",
+			types.StoreInstruction.String(), src.Type().String()))
+	}
+	if dst.Type() != types.Global && dst.Type() != types.Param && dst.Type() != types.DeclareInstruction {
+		panic(fmt.Sprintf("cannot create %s: destination type %s not allowed",
+			types.StoreInstruction.String(), dst.Type().String()))
+	}
+	if src.DataType() != dst.DataType() {
+		// Cast to destination data type.
+		if src.DataType() == types.Int {
+			src = b.CreateIntToFloat(src)
+		} else {
+			src = b.CreateFloatToInt(src)
+		}
+	}
+	inst := &StoreInstruction{
 		b:   b,
 		id:  b.f.getId(),
-		typ: types.Int,
-	}
-	if len(name) > 0 {
-		inst.name = name
-	} else {
-		inst.name = fmt.Sprintf("%s%d", labelAllocPrefix, inst.id)
-	}
-	b.instructions = append(b.instructions, inst)
-	b.f.variables = append(b.f.variables, inst)
-	return inst
-}
-
-// CreateDeclareFloat creates a new types.Float variable on the stack.
-func (b *Block) CreateDeclareFloat(name string) *DeclareInstruction {
-	inst := &DeclareInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		typ: types.Float,
-	}
-	if len(name) > 0 {
-		inst.name = name
-	} else {
-		inst.name = fmt.Sprintf("%s%d", labelAllocPrefix, inst.id)
-	}
-	b.instructions = append(b.instructions, inst)
-	b.f.variables = append(b.f.variables, inst)
-	return inst
-}
-
-// CreateLoad loads the value of Value src into the returned MemoryInstruction.
-func (b *Block) CreateLoad(src Value) *MemoryInstruction {
-	if src.Type() != types.Param && src.Type() != types.Global && src.Type() != types.Local {
-		panic(fmt.Sprintf("cannot load from %s", src.Type().String()))
-	}
-	inst := &MemoryInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		typ: types.LoadInstruction,
-		src: src,
-	}
-	b.instructions = append(b.instructions, inst)
-	return inst
-}
-
-// CreateStore stores the value of virtual register src into the memory allocated variable dst.
-func (b *Block) CreateStore(src Value, dst *DeclareInstruction) *MemoryInstruction {
-	if dst.Type() != types.Param && dst.Type() != types.Global && dst.Type() != types.Local {
-		panic(fmt.Sprintf("cannot store to %s", dst.Type().String()))
-	}
-	if src.Type() != types.Data {
-		panic(fmt.Sprintf("cannot store from %s", src.Type().String()))
-	}
-	inst := &MemoryInstruction{
-		b:   b,
-		id:  b.f.getId(),
-		typ: types.StoreInstruction,
 		src: src,
 		dst: dst,
+		en:  true,
 	}
 	b.instructions = append(b.instructions, inst)
 	return inst
 }
 
-// -------------------------------
-// ----- String instructions -----
-// -------------------------------
+// CreateLoad creates a LoadInstruction given a source variable. The source variable must be either a types.Local,
+// types.Global or types.Param type Value.
+func (b *Block) CreateLoad(src Value) *LoadInstruction {
+	if src.Type() != types.Global && src.Type() != types.Param && src.Type() != types.DeclareInstruction {
+		panic(fmt.Sprintf("cannot create load from %s: can only load from globals, arguments or locally declared variables",
+			src.Type().String()))
+	}
+	inst := &LoadInstruction{
+		b:   b,
+		id:  b.f.getId(),
+		src: src,
+		en:  true,
+	}
+	b.instructions = append(b.instructions, inst)
+	return inst
+}
 
-// CreateString creates a string in the module's global data. The return value of CreateString is a pointer to the
-// string, like a C-style char-pointer.
-func (b *Block) CreateString(s string) *Global {
-	return b.f.m.CreateString(s)
+// --------------------------------
+// ----- Declare instructions -----
+// --------------------------------
+
+// CreateDeclare creates a locally declared variable that resides on the stack of the Function that owns Block b.
+func (b *Block) CreateDeclare(name string, typ types.DataType) *DeclareInstruction {
+	if typ > types.Float {
+		panic(fmt.Sprintf("cannot declare a variable: only %s and %s variables are allowed",
+			types.Int.String(), types.Float.String()))
+	}
+	inst := &DeclareInstruction{
+		b:   b,
+		id:  b.f.getId(),
+		typ: typ,
+		en:  true,
+	}
+	if len(name) > 0 {
+		inst.name = name
+	} else {
+		inst.name = fmt.Sprintf("%s%d", labelDeclare, inst.id)
+	}
+	// Append declaration to Block b's Function's slice of locally declared variables.
+	b.f.variables = append(b.f.variables, inst)
+	return inst
+}
+
+// ---------------------------
+// ----- Print statement -----
+// ---------------------------
+
+// CreatePrint creates an LIR function call statement that prints a slice of LIR Values.
+// Runtime execution uses standard library printf. Print appends a newline character to the printout.
+func (b *Block) CreatePrint(val []Value) *FunctionCallInstruction {
+	for _, e1 := range val {
+		if e1.Type() != types.DataInstruction && e1.Type() != types.LoadInstruction &&
+			e1.Type() != types.Constant && e1.Type() != types.FunctionCallInstruction {
+			panic(fmt.Sprintf("cannot print a %s value", e1.Type().String()))
+		}
+	}
+
+	// Check if printf is defined.
+	printf := b.f.m.GetFunction(reservedNames[0])
+	if printf == nil {
+		// Define printf and add it to Module m.
+		b.f.m.Lock()
+		printf = &Function{
+			m:      b.f.m,
+			id:     b.f.m.seq,
+			name:   reservedNames[0],
+			typ:    types.Int,
+			params: make([]*Param, 2),
+		}
+		b.f.m.seq++
+		format := &Param{
+			f:    printf,
+			id:   printf.getId(),
+			name: "format",
+			typ:  types.String,
+			en:   true,
+		}
+		valist := &Param{
+			f:    printf,
+			id:   printf.getId(),
+			name: "args",
+			typ:  types.VaList,
+			en:   true,
+		}
+		printf.params[0] = format
+		printf.params[1] = valist
+		b.f.m.functions = append(b.f.m.functions, printf)
+		b.f.m.fmap[printf.name] = printf
+		b.f.m.Unlock()
+	}
+
+	// Pre allocate string buffer.
+	sb := strings.Builder{}
+	sb.Grow(len(val) * 3) // A % and data type format identifier plus a single space (newline at end).
+
+	// Build format string.
+	for i1, e1 := range val {
+		sb.WriteRune('%')
+		switch e1.DataType() {
+		case types.Int:
+			sb.WriteRune('d')
+		case types.Float:
+			sb.WriteRune('f')
+		case types.String:
+			sb.WriteRune('s')
+		default:
+			panic(fmt.Sprintf("cannot print data type %s", e1.String()))
+		}
+		if i1 < len(val)-1 {
+			sb.WriteRune(' ')
+		}
+	}
+	sb.WriteRune('\n')
+
+	// Create string constant and load the constant address.
+	format := b.f.m.CreateGlobalString(sb.String())
+	fload := b.CreateLoad(format)
+
+	// Create variable argument list.
+	valist := &VaList{
+		b:    b,
+		id:   b.f.getId(),
+		vars: val,
+		en:   true,
+	}
+
+	b.instructions = append(b.instructions, valist)
+
+	// Create function call to printf.
+	inst := &FunctionCallInstruction{
+		b:         b,
+		id:        b.f.getId(),
+		target:    printf,
+		arguments: []Value{fload, valist},
+		en:        true,
+	}
+	b.instructions = append(b.instructions, inst)
+	return inst
 }

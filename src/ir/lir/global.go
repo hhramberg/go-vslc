@@ -9,103 +9,84 @@ import (
 // ----- Type definitions -----
 // ----------------------------
 
-// Global defines a LIR global variable. A global variable can be either int, float or string.
-// strings are supported because strings must be globally available during assembly generation anyways.
+// Global defines an LIR global variable.
 type Global struct {
-	id   int            // LIR sequence number.
-	name string         // Optional name of global variable.
-	typ  types.DataType // Data type of global variable.
-	val  interface{}    // Value of variable.
-	wr   interface{}    // Register Interference Graph (RIG) node wrapper.
+	m    *Module        // m is the Module that owns this Global.
+	id   int            // id is the unique identifier of the global variable.
+	name string         // name defines the unique string name of the global variable.
+	typ  types.DataType // typ defines the data type of the global variable.
+	hw   interface{}
+	en   bool // Set to true if instruction is enabled.
 }
 
 // ---------------------
 // ----- Constants -----
 // ---------------------
 
-// globalLabelPrefix defines the label prefix for global variables.
-const globalLabelPrefix = "g"
-
 // -------------------
-// ----- globals -----
+// ----- Globals -----
 // -------------------
 
 // ---------------------
-// ----- functions -----
+// ----- Functions -----
 // ---------------------
 
-// Id returns the assigned and unique identifier given to the Global g when it was created.
-func (g Global) Id() int {
-	return g.id
+// Id returns the unique id of the Global.
+func (inst *Global) Id() int {
+	return inst.id
 }
 
-// Name returns the name string of the Global g if it was assigned curing g's creation. If no name was given, the
-// name is equal to the global label concatenated with g's unique identifier.
-func (g Global) Name() string {
-	if len(g.name) > 0 {
-		return g.name
-	}
-	return fmt.Sprintf("%s%d", globalLabelPrefix, g.id)
+// Name returns the textual representation of the virtual register Value of the Global.
+func (inst *Global) Name() string {
+	return inst.name
 }
 
-// Type returns the types.Global constant, as this is a globally declared data object.
-func (g Global) Type() types.Type {
+// Type returns the constant identifying this instruction as a Global variable.
+func (inst *Global) Type() types.InstructionType {
 	return types.Global
 }
 
-// DataType returns the datatype of the global data object, either types.Int, types.Float or types.String.
-func (g Global) DataType() types.DataType {
-	return g.typ
+// DataType returns the DataType of the declared variable that was loaded.
+func (inst *Global) DataType() types.DataType {
+	return inst.typ
 }
 
-// String returns a textual LIR string representation of the Global variable g.
-func (g Global) String() string {
-	if g.typ == types.String {
-		return fmt.Sprintf("global %s: %s, %q", g.name, g.typ.String(), g.val.(string))
-	}
-	return fmt.Sprintf("global %s: %s", g.name, g.typ.String())
+// String returns the textual LIR representation of the Global.
+func (inst *Global) String() string {
+	return fmt.Sprintf("%s: %s", inst.Name(), inst.typ.String())
 }
 
-// Has2Operands returns false for Global, because globals don't have operands.
-func (g Global) Has2Operands() bool {
-	return false
+// SetHW panics for the Global, because it's a memory value, not a virtual register.
+func (inst *Global) SetHW(hw interface{}) {
+	inst.hw = hw
 }
 
-// Has1Operand returns false for Global, because globals don't have operands.
-func (g Global) Has1Operand() bool {
-	return false
+// GetHW returns <nil> for the Global.
+func (inst *Global) GetHW() interface{} {
+	return inst.hw
 }
 
-// GetOperand1 panics when called on Global, because globals aren't computed.
-func (g Global) GetOperand1() Value {
-	panic("global does not have operands")
+// Operand1 returns <nil> for the Global.
+func (inst *Global) Operand1() Value {
+	return nil
 }
 
-// GetOperand2 panics when called on Global, because globals aren't computed.
-func (g Global) GetOperand2() Value {
-	panic("global does not have operands")
+// Operand2 returns <nil> for the Global.
+func (inst *Global) Operand2() Value {
+	return nil
 }
 
-// SetHW doesn't do anything for Global, but is implemented to support interface Value.
-func (g Global) SetHW(r interface{}) {
+// Enable enables the instruction, resulting in that it will be printed using Module.String.
+func (inst *Global) Enable() {
+	inst.en = true
 }
 
-// GetHW returns nil, because Global resides in memory.
-func (g Global) GetHW() interface{} {
-	panic("global is a memory data object, it doesn't reside in registers")
+// Disable disables the instruction, resulting in that it won't be printed using Module.String.
+func (inst *Global) Disable() {
+	inst.en = false
 }
 
-// SetWrapper sets the wrapper for this instruction during register allocation.
-func (g Global) SetWrapper(wr interface{}) {
-	g.wr = wr
-}
-
-// GetWrapper sets the wrapper for this instruction during register allocation.
-func (g Global) GetWrapper() interface{} {
-	return g.wr
-}
-
-// IsConstant returns false for Global.
-func (d *Global) IsConstant() bool {
-	return false
+// IsEnabled returns true if the isntruction is enabled.
+func (inst *Global) IsEnabled() bool {
+	return inst.en
 }

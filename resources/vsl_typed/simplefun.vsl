@@ -1,0 +1,12 @@
+def defall () int
+begin
+    var x int
+    x := my_deftion( 5, 10 )
+    return 0
+end
+
+def my_deftion ( s, t int) int
+begin
+    print "Parameter s is", s, "t is ", t
+    return 0
+end

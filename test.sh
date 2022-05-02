@@ -10,6 +10,7 @@ VSL="./resources/vsl_typed"
 SRC_FILES="$VSL/*.vsl"
 VSLC="$BUILD/vslc"
 TARGET="aarch64"
+declare -i TESTS=0
 declare -i FAILED=0
 declare -i PASSED=0
 
@@ -54,6 +55,101 @@ fi
 ###############################
 ##### Single thread tests #####
 ###############################
+
+echo "Testing single threaded compiler"
+echo ""
+echo "Testing compiling into LIR intermediate representation to verify compiler frontend and intermediate stage"
+echo ""
+for i1 in $SRC_FILES
+do
+  TESTS=$((TESTS + 1))
+  DST="$BUILD/$(basename "$i1" .vsl)"
+  echo -n "Compiling $i1 ... "
+
+  # Compile VSL into executable using LLVM backend.
+   # | read ERR # > /dev/null # Redirect errors to /dev/null.
+
+  if $VSLC "$i1";
+  then
+    echo "SUCCESS!"
+    PASSED=$((PASSED + 1))
+  else
+    echo "FAILED!"
+    echo "$ERR"
+    FAILED=$((FAILED + 1))
+    continue
+  fi
+done
+
+echo ""
+echo "Tests complete! $TESTS tests were run."
+echo "$PASSED tests passed, $FAILED tests failed."
+
+if [ $PASSED == $TESTS ];
+then
+  echo "All $TESTS test passed."
+fi
+
+################################
+##### Multithreading tests #####
+################################
+
+# Reset status counters.
+TESTS=$((0))
+PASSED=$((0))
+FAILED=$((0))
+
+echo ""
+echo "Testing single threaded compiler"
+echo ""
+echo "Testing compiling into LIR intermediate representation to verify compiler frontend and intermediate stage"
+echo ""
+for i1 in $SRC_FILES
+do
+  # Testing parallel compiling running [2, 16] threads i parallel.
+  for i2 in 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+  do
+    TESTS=$((TESTS + 1))
+    DST="$BUILD/$(basename "$i1" .vsl)"
+    echo -n "Compiling $i1 with up to $i2 threads ... "
+
+    # Compile VSL into executable using LLVM backend.
+
+    if $VSLC -t "$i2" "$i1";
+    then
+      echo "SUCCESS!"
+      PASSED=$((PASSED + 1))
+    else
+      echo "FAILED!"
+      echo "$ERR"
+      FAILED=$((FAILED + 1))
+      continue
+    fi
+  done
+done
+
+echo ""
+echo "Tests complete! $TESTS tests were run."
+echo "$PASSED tests passed, $FAILED tests failed."
+
+if [ $PASSED == $TESTS ];
+then
+  echo "All $TESTS test passed."
+fi
+
+###################
+##### Cleanup #####
+###################
+
+echo "Cleaning up ..."
+echo "Removing VSL compiler at $VSLC"
+rm "$VSLC"
+
+exit 0
+
+############################
+##### DELETE TEMP TEST #####
+############################
 
 echo "Testing single threaded compiler"
 echo ""

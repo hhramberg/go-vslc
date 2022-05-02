@@ -1,9 +1,10 @@
 package arm
 
 import (
-	"errors"
 	"fmt"
-	"vslc/src/ir"
+	"vslc/src/backend/regfile"
+	"vslc/src/ir/lir"
+	"vslc/src/ir/lir/types"
 	"vslc/src/util"
 )
 
@@ -33,123 +34,204 @@ import (
 // - Generate function body.
 // - De-allocate stack.
 // - Return x0 for integer functions, use v0 for floating point functions.
-func genFunction(fun *ir.Symbol, wr *util.Writer, opt util.Options) error {
-	// Verify input symbol.
-	if fun == nil {
-		return errors.New("function symbol table entry is <nil>")
+func genFunction(fun *lir.Function, wr *util.Writer) error {
+	if len(fun.Blocks()) < 1 {
+		return nil
 	}
-	if fun.Typ != ir.SymFunc {
-		return errors.New("symbol table entry is not a function")
-	}
-	if fun.Node == nil {
-		return errors.New("function syntax tree entry is <nil>")
-	}
-	if fun.Node.Typ != ir.FUNCTION {
-		return fmt.Errorf("expected syntax tree node FUNCTION, got %s", fun.Node.Type())
-	}
+	rf := CreateRegisterFile()
 
 	// Write function name label.
 	wr.Write("\n")
-	wr.Label(fun.Name)
+	wr.Label(fun.Name())
 
 	// Calculate new stack size.
-	sa := wordSize * (fun.Nparams + fun.Nlocals + 2) // Stack adjust. Accommodate all local variables, params and FP + LR.
+	sa := wordSize * (len(fun.Params()) + len(fun.Locals()) + 2) // Stack adjust. Accommodate all local variables, params and FP + LR.
 	spill := sa % stackAlign
 	if spill != 0 {
 		sa += stackAlign - spill
 	}
 
 	// Adjust stack and set stack frame pointer.
-	wr.Write("\tsub\t%s, %s, #%d\n", regi[sp], regi[sp], sa)
+	wr.Write("\tsub\t%s, %s, #%d\n", rf.SP(), rf.SP(), sa)
 
 	// Save old frame pointer and link register.
-	wr.Write("\tstp\t%s, %s, [%s, #%d]\n", regi[fp], regi[lr], regi[sp], sa-(wordSize<<1))
+	wr.Write("\tstp\t%s, %s, [%s, #%d]\n", rf.FP(), rf.LR(), rf.SP(), sa-(wordSize<<1))
 
 	// Set frame pointer to old stack  pointer.
-	wr.Write("\tadd\t%s, %s, #%d\n", regi[fp], regi[sp], sa)
+	wr.Write("\tadd\t%s, %s, #%d\n", rf.FP(), rf.SP(), sa)
 
 	ii := 0 // Number of integer parameters.
 	fi := 0 // Number of float parameters.
 
 	// Put arguments on stack.
 	offset := -(wordSize * 3) // Offset by 3: 2 for skipping old SP and LR, one to align with current word.
-	for _, e1 := range fun.Params {
-		if e1.DataTyp == i {
+	for i1, e1 := range fun.Params() {
+		if e1.DataType() == i {
 			// Integer parameter.
 			if ii > paramReg {
 				// Load from stack, store on stack. Reuse x0, because argument passed in x0 is stored on stack by this point.
-				wr.Write("\tldr\t%s, [%s, #%d]\n", regi[r0], regi[fp], wordSize*e1.Seq)
-				wr.Write("\tstr\t%s, [%s, #%d]\n", regi[r0], regi[fp], offset)
+				wr.Write("\tldr\t%s, [%s, #%d]\n", regi[r0], rf.FP(), wordSize*i1)
+				wr.Write("\tstr\t%s, [%s, #%d]\n", regi[r0], rf.FP(), offset)
 			} else {
 				// Store directly on stack from register.
-				wr.Write("\tstr\t%s, [%s, #%d]\n", regi[r0+ii], regi[fp], offset)
+				wr.Write("\tstr\t%s, [%s, #%d]\n", regi[r0+ii], rf.FP(), offset)
 			}
 			ii++
 		} else {
 			// Float parameter.
 			if fi > paramReg {
 				// Load from stack, store on stack. Reuse v0, because argument passed in v0 is stored on stack by this point.
-				wr.Write("\tldr\t%s, [%s, #%d]\n", regi[v0], regi[fp], wordSize*e1.Seq)
-				wr.Write("\tstr\t%s, [%s, #%d]\n", regi[v0], regi[fp], offset)
+				wr.Write("\tldr\t%s, [%s, #%d]\n", regi[v0], rf.FP(), wordSize*i1)
+				wr.Write("\tstr\t%s, [%s, #%d]\n", regi[v0], rf.FP(), offset)
 			} else {
 				// Store directly on stack from register.
-				wr.Write("\tstr\t%s, [%s, #%d]\n", regi[v0+fi], regi[fp], offset)
+				wr.Write("\tstr\t%s, [%s, #%d]\n", regi[v0+fi], rf.FP(), offset)
 			}
 			fi++
 		}
 		offset -= wordSize
 	}
 
-	// Generate function body.
-	rf := CreateRegisterFile()
-	ls := util.Stack{} // Label stack for continue statement.
-	st := util.Stack{} // Scope stack for local scopes.
-	st.Push(&ir.Global.HT)
-	st.Push(&fun.Locals.HT)
-	if err := gen(fun.Node.Children[3], fun, &rf, wr, &st, &ls); err != nil {
-		return err
-	}
-	st.Pop()
-	st.Pop()
+	ls := util.Stack{}
 
+	// Generate function body.
+	for _, e1 := range fun.Blocks() {
+		// Write label for basic block.
+		wr.Label(e1.Name())
+		for _, e2 := range e1.Instructions() {
+			// TODO: Generate instructions.
+			switch e2.Type() {
+			case types.DataInstruction:
+				if e2.DataType() == types.String {
+					// TODO: Handle strings exclusively.
+					break
+				}
+				if e2.DataType() == types.VaList {
+					// TODO: handle valist exclusively.
+					break
+				}
+				if err := genExpression(e2.(*lir.DataInstruction), wr); err != nil {
+					return err
+				}
+			case types.LoadInstruction:
+				dst := e2.GetHW().(*lir.LiveNode).Reg.(regfile.Register)
+				if e2.DataType() == types.String {
+					wr.Write("\tadrp\t%s, %s\n",
+						dst.String(), e2.Operand1().Name())
+					wr.Write("\tadd\t%s, %s, :lo12:%s\n", dst.String(), dst.String(), e2.Operand1().Name())
+					break
+				}
+				switch e2.Operand1().Type(){
+				case types.DeclareInstruction:
+					// Add 3 to offset: 1 to align for bottom-down, 2 for skipping stack saved SP and LR.
+					src := e2.Operand1().(*lir.DeclareInstruction)
+					wr.Write("\t%s\t%s, [%s, #%d]\n",
+						load, dst.String(),
+						rf.FP(), -wordSize*(src.Seq()+3+len(fun.Params()))) // Locals are stored after parameters.
+				case types.Param:
+					// Add 3 to offset: 1 to align for bottom-down, 2 for skipping stack saved SP and LR.
+					src := e2.Operand1().(*lir.Param)
+					wr.Write("\t%s\t%s, [%s, #%d]\n",
+						load, dst.String(),
+						rf.FP(), -wordSize*(src.Id()+3)) // Params go first on stack.
+				case types.Global:
+					src := e2.Operand1().(*lir.Global)
+
+					// Use x0 for storing the temporary value that is &GLOBAL_VARIABLE. Load cannot happen after return.
+					wr.Write("\tadrp\t%s, %s\n", rf.GetI(r0).String(), src.Name())
+					wr.Write("\t%s\t%s, [%s, :lo12:%s]\n",
+						load, dst.String(), rf.GetI(r0).String(), src.Name())
+				default:
+					panic(fmt.Sprintf("compiler error: unexpected load source type %s", e2.Operand1().Type().String()))
+				}
+			case types.StoreInstruction:
+				src := e2.Operand1().GetHW().(*lir.LiveNode).Reg.(regfile.Register)
+				switch e2.Operand2().Type() {
+				case types.DeclareInstruction:
+					// Add 3 to offset: 1 to align for bottom-down, 2 for skipping stack saved SP and LR.
+					dst := e2.Operand2().(*lir.DeclareInstruction)
+					wr.Write("\t%s\t%s, [%s, #%d]\n",
+						store, src.String(),
+						rf.FP(), -wordSize*(dst.Seq()+3+len(fun.Params()))) // Locals are stored after parameters.
+				case types.Param:
+					// Add 3 to offset: 1 to align for bottom-down, 2 for skipping stack saved SP and LR.
+					dst := e2.Operand2().(*lir.Param)
+					wr.Write("\t%s\t%s, [%s, #%d]\n",
+						store, src.String(),
+						rf.FP(), -wordSize*(dst.Id()+3)) // Params go first on stack.
+				case types.Global:
+					dst := e2.Operand2().(*lir.Global)
+
+					// Use x0 for storing the temporary value that is &GLOBAL_VARIABLE. Load cannot happen after return.
+					wr.Write("\tadrp\t%s, %s\n", rf.GetI(r0), dst.Name())
+					wr.Write("\t%s\t%s, [%s, :lo12:%s]\n",
+						store, src.String(), src.String(), dst.Name())
+				default:
+					panic(fmt.Sprintf("compiler error: unexpected store destination type %d", e2.Operand2().Type()))
+				}
+			case types.Constant:
+				r := e2.GetHW().(*lir.LiveNode).Reg.(regfile.Register) // Assigned hardware register.
+				if e2.DataType() == types.Int {
+					val := e2.(*lir.Constant).Value().(int)
+					if minImm <= val && val <= maxImm {
+						// Use immediate instruction.
+						wr.Write("\tmov\t%s, #%d\n", r.String(), val)
+					} else {
+						// Create hex string of integer and load.
+						istr := fun.CreateGlobalString(fmt.Sprintf("%x", val))
+						wr.Write("\tadrp\t%s, =%s\n", r.String(), istr.Name())
+						wr.Write("\tldr\t%s, [%s, :lo12:%s]\n", r.String(), r.String(), istr.Name())
+					}
+				} else {
+					val := e2.(*lir.Constant).Value().(float64)
+
+					// Append hex string of float to global string table.
+					fstr := fun.CreateGlobalString(fmt.Sprintf("%x", val))
+					wr.Write("\tadrp\t%s, =%s\n", r.String(), fstr.Name())
+					wr.Write("\tldr\t%s, [%s, :lo12:%s]\n", r.String(), r.String(), fstr.Name())
+				}
+			case types.CastInstruction:
+				if e2.DataType() == types.Int {
+					// Cast float to int.
+					wr.Write("\tfcvts\t%s, %s\n",
+						e2.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String(),
+						e2.Operand1().GetHW().(*lir.LiveNode).Reg.(regfile.Register).String())
+				} else {
+					// Cast int to float.
+					wr.Write("\tscvtf\t%s, %s\n",
+						e2.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String(),
+						e2.Operand1().GetHW().(*lir.LiveNode).Reg.(regfile.Register).String())
+				}
+			case types.BranchInstruction:
+				if err := genBranch(e2.(*lir.BranchInstruction), rf, wr, &ls); err != nil {
+					return err
+				}
+			case types.ReturnInstruction:
+				if err := genReturn(e2.(*lir.ReturnInstruction), fun, &rf, wr); err != nil {
+					return err
+				}
+			case types.FunctionCallInstruction:
+				if err := genFunctionCall(e2.(*lir.FunctionCallInstruction), rf, wr); err != nil {
+					return err
+				}
+			case types.PrintInstruction, types.Global, types.Param, types.DeclareInstruction:
+				// Ignore, because they've been handled during LIR construction.
+				continue
+			default:
+				return fmt.Errorf("unexpected LIR instruction type %d", e2.Type())
+			}
+		}
+	}
 	return nil
 }
 
 // genReturn generates a function return statement. An error is returned if something went wrong.
-func genReturn(n *ir.Node, fun *ir.Symbol, rf *registerFile, wr *util.Writer, st *util.Stack) error {
-	// Generate return value.
-	c1 := n.Children[0]
-	var r *register
-
-	// Generate return value.
-	switch c1.Typ {
-	case ir.INTEGER_DATA:
-		r = &rf.regi[r0]
-		if err := genLoadImmToRegister(c1.Data.(int), r, wr); err != nil {
-			return err
-		}
-	case ir.FLOAT_DATA:
-		r = &rf.regf[v0]
-		label := floatToGlobalString(c1.Data.(float64))
-		wr.Write("\tldr\t%s, =%s\n", r.String(), label)
-	case ir.EXPRESSION:
-		var err error
-		if r, err = genExpression(c1, rf, wr, st); err != nil {
-			return err
-		}
-	case ir.IDENTIFIER_DATA:
-		var err error
-		if r, err = loadIdentifier(c1.Data.(string), rf, wr, st); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("compiler error: expected node type of INTEGER_DATA, FLOAT_DATA, EXPRESSION or IDENTIFIER, got %s",
-			c1.Type())
-	}
+func genReturn(v *lir.ReturnInstruction, fun *lir.Function, rf *RegisterFile, wr *util.Writer) error {
+	r := v.Operand1().GetHW().(*lir.LiveNode).Reg.(regfile.Register)
 
 	// Check if correct register index was assigned.
-	if r.idx != r0 {
-		if r.typ == i {
+	if r.Id() != r0 {
+		if r.Type() == int(i) {
 			wr.Write("\tmov\t%s, %s\n", rf.regi[r0].String(), r.String())
 		} else {
 			wr.Write("\tmov\t%s, %s\n", rf.regf[v0].String(), r.String())
@@ -157,18 +239,18 @@ func genReturn(n *ir.Node, fun *ir.Symbol, rf *registerFile, wr *util.Writer, st
 	}
 
 	// Check if return value is of correct type.
-	if r.typ != fun.DataTyp {
-		if r.typ == i {
+	if r.Type() != int(fun.DataType()) {
+		if r.Type() == int(i) {
 			// Cast integer to float.
-			wr.Write("\tscvtf\t%s, %s\n", rf.regf[v0].String(), r.String())
+			wr.Write("\tscvtf\t%s, %s\n", rf.GetF(v0).String(), r.String())
 		} else {
 			// Cast float to integer.
-			wr.Write("\tfcvts\t%s, %s\n", rf.regi[r0].String(), r.String())
+			wr.Write("\tfcvts\t%s, %s\n", rf.GetI(r0).String(), r.String())
 		}
 	}
 
 	// Calculate allocated stack size.
-	sa := wordSize * (fun.Nparams + fun.Nlocals + 2) // Stack adjust.
+	sa := wordSize * (len(fun.Params()) + len(fun.Locals()) + 2) // Stack adjust.
 	spill := sa % stackAlign
 	if spill != 0 {
 		sa += stackAlign - spill
