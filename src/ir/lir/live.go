@@ -68,7 +68,7 @@ func CalcLiveness(opt util.Options, m *Module) [][]*LiveNode {
 		// Spawn t worker go routines.
 		wg.Add(t)
 		for i1 := 0; i1 < t; i1++ {
-			if res < i1 {
+			if i1 < res {
 				end++
 			}
 
@@ -147,20 +147,16 @@ func calcLivenessFunction(f *Function) []*LiveNode {
 
 	// Bind parameters.
 	for _, e1 := range f.params {
-		n := &LiveNode{
+		e1.SetHW(&LiveNode{
 			Val: e1,
-			//Enabled: true,
-		}
-		e1.SetHW(n)
+		})
 	}
 
 	// Bind locally declared variables.
 	for _, e1 := range f.variables {
-		n := &LiveNode{
+		e1.SetHW(&LiveNode{
 			Val: e1,
-			//Enabled: true,
-		}
-		e1.SetHW(n)
+		})
 	}
 
 	// Fill instructions.
@@ -217,6 +213,13 @@ func calcLivenessFunction(f *Function) []*LiveNode {
 // If no ir.Value instructions are referenced, <nil> is returned.
 func ref(n *LiveNode) []*LiveNode {
 	v := n.Val
+
+	// Loads reference external data: no dependencies.
+	if v.Type() == types.LoadInstruction {
+		return nil
+	}
+
+	// Function calls have multiple dependencies.
 	if v.Type() == types.FunctionCallInstruction {
 		res := make([]*LiveNode, len(v.(*FunctionCallInstruction).arguments))
 		for i1, e1 := range v.(*FunctionCallInstruction).arguments {
@@ -224,6 +227,8 @@ func ref(n *LiveNode) []*LiveNode {
 		}
 		return res
 	}
+
+	// VaLists have multiple dependencies.
 	if v.Type() == types.DataInstruction && v.DataType() == types.VaList {
 		res := make([]*LiveNode, len(v.(*VaList).vars))
 		for i1, e1 := range v.(*VaList).vars {
@@ -232,6 +237,7 @@ func ref(n *LiveNode) []*LiveNode {
 		return res
 	}
 
+	// Remaining instructions are two or three address code instructions.
 	if op1 := v.Operand1(); op1 != nil {
 		res := make([]*LiveNode, 1, 2)
 		res[0] = op1.GetHW().(*LiveNode)
@@ -247,8 +253,11 @@ func ref(n *LiveNode) []*LiveNode {
 // generates a new virtual register ir.Value.
 func def(n *LiveNode) *LiveNode {
 	v := n.Val
-	if v.Type() == types.DataInstruction || v.Type() == types.LoadInstruction ||
-		v.Type() == types.FunctionCallInstruction || v.Type() == types.Constant {
+	if v.Type() == types.DataInstruction ||
+		v.Type() == types.LoadInstruction ||
+		v.Type() == types.FunctionCallInstruction ||
+		v.Type() == types.Constant ||
+		v.Type() == types.CastInstruction {
 		return v.GetHW().(*LiveNode)
 	}
 	return nil

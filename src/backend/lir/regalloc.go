@@ -71,7 +71,7 @@ func AllocateRegisters(opt util.Options, m *lir.Module) error {
 			t = l
 		}
 		n := l / t
-		res := n % t
+		res := l % t
 
 		start := 0
 		end := n
@@ -84,8 +84,8 @@ func AllocateRegisters(opt util.Options, m *lir.Module) error {
 		wg.Add(t)
 
 		// Spawn t worker go routines.
-		for i1 := 0; i1 < l; i1++ {
-			if res < i1 {
+		for i1 := 0; i1 < t; i1++ {
+			if i1 < res {
 				end++
 			}
 
@@ -93,7 +93,7 @@ func AllocateRegisters(opt util.Options, m *lir.Module) error {
 			go func(start, end int, wg *sync.WaitGroup) {
 				defer wg.Done()
 				for i2, e2 := range rigs[start:end] {
-					// Pass register file rf by value, not pointer, such that every go routine gets it very own copy.
+					// Pass register file rf by value, not pointer, such that every go routine gets its very own copy.
 					if err := allocateRegisterFunc(opt, m.Functions()[start:end][i2], rf, e2); err != nil {
 						perr.Append(err)
 					}
@@ -186,8 +186,10 @@ func allocateRegisterFunc(opt util.Options, f *lir.Function, rf regfile.Register
 		}
 
 		// Check for datatype of Value. No need to assign physical register to branch instructions etc.
-		if n.(*lir.LiveNode).Val.Type() != types.DataInstruction && n.(*lir.LiveNode).Val.Type() != types.LoadInstruction &&
-			n.(*lir.LiveNode).Val.Type() != types.FunctionCallInstruction && n.(*lir.LiveNode).Val.Type() != types.Constant &&
+		if n.(*lir.LiveNode).Val.Type() != types.DataInstruction &&
+			n.(*lir.LiveNode).Val.Type() != types.LoadInstruction &&
+			n.(*lir.LiveNode).Val.Type() != types.FunctionCallInstruction &&
+			n.(*lir.LiveNode).Val.Type() != types.Constant &&
 			n.(*lir.LiveNode).Val.Type() != types.CastInstruction {
 			continue
 		}
@@ -240,66 +242,3 @@ func allocateRegisterFunc(opt util.Options, f *lir.Function, rf regfile.Register
 	}
 	return nil
 }
-
-//// GetNumberOfNeighbours returns the number of enabled neighbours of val n.
-//func (n *node) GetNumberOfNeighbours() int {
-//	count := 0
-//	for _, e1 := range n.neighbours {
-//		if e1.enabled {
-//			count++
-//		}
-//	}
-//	return count
-//}
-//
-//// GetEnabledNeighbours returns all neighbours of val n that are enabled.
-//func (n *node) GetEnabledNeighbours() []*node {
-//	res := make([]*node, 0, len(n.neighbours))
-//	for _, e1 := range n.neighbours {
-//		if e1.enabled {
-//			res = append(res, e1)
-//		}
-//	}
-//	return res
-//}
-
-//// String creates a print friendly string representing this node. It returns a string of the instruction
-//// ln.val and the live/neighbour variables at the instructions point in the program.
-//func (n *node) String() string {
-//	if len(n.neighbours) > 0 {
-//		sb := strings.Builder{}
-//		for i1, e1 := range n.neighbours {
-//			sb.WriteString((*e1.val).Name())
-//			if i1 < len(n.neighbours)-1 {
-//				sb.WriteRune(',')
-//				sb.WriteRune(' ')
-//			}
-//		}
-//		return fmt.Sprintf("%s\tLive: {%s}", (*n.val).String(), sb.String())
-//	}
-//	return fmt.Sprintf("%s\tLive: {}", (*n.val).String())
-//}
-
-////ref returns the local virtual registers that are referenced by lir.Value v. If no variables are referenced, ref returns nil.
-//func ref(n *lir.LiveNode) []*lir.LiveNode {
-//	v := n.val
-//	if (*v).Has2Operands() {
-//		op1 := (*v).GetOperand1().GetWrapper().(*node)
-//		op2 := (*v).GetOperand2().GetWrapper().(*node)
-//		return []*node{op1, op2}
-//	}
-//	if (*v).Has1Operand() {
-//		op1 := (*v).GetOperand1().GetWrapper().(*node)
-//		return []*node{op1}
-//	}
-//	return nil
-//}
-//
-//// def returns the local virtual registers that is defined, if any. Else it returns <nil>.
-//func def(n *node) []*node {
-//	v := n.val
-//	if (*v).Type() == types.Data || (*v).Type() == types.Load {
-//		return []*node{(*v).GetWrapper().(*node)}
-//	}
-//	return nil
-//}

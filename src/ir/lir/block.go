@@ -120,7 +120,7 @@ func (b *Block) CreateIntToFloat(v Value) *CastInstruction {
 		src: v,
 		en:  true,
 	}
-	b.instructions = append(b.instructions)
+	b.instructions = append(b.instructions, inst)
 	return inst
 }
 
@@ -138,7 +138,7 @@ func (b *Block) CreateFloatToInt(v Value) *CastInstruction {
 		src: v,
 		en:  true,
 	}
-	b.instructions = append(b.instructions)
+	b.instructions = append(b.instructions, inst)
 	return inst
 }
 
@@ -291,6 +291,27 @@ func (b *Block) CreateFunctionCall(target *Function, arguments []Value) *Functio
 
 	if len(target.params) != len(arguments) {
 		panic(fmt.Sprintf("expected %d arguments, got %d", len(target.params), len(arguments)))
+	}
+
+	// Verify correct data type of arguments.
+	for i1, e1 := range arguments {
+		param := target.Params()[i1]
+		if e1.DataType() != param.DataType() {
+			if e1.DataType() == types.Int {
+				// Cast int to float.
+				cast := b.CreateIntToFloat(e1)
+				b.instructions = append(b.instructions, cast)
+				arguments[i1] = cast
+			} else if e1.DataType() == types.Float {
+				// Cast float to int.
+				cast := b.CreateFloatToInt(e1)
+				b.instructions = append(b.instructions, cast)
+				arguments[i1] = cast
+			} else {
+				// String.
+				panic("cannot cast string to float nor int during function call")
+			}
+		}
 	}
 
 	inst := &FunctionCallInstruction{
@@ -467,7 +488,8 @@ func (b *Block) CreateDeclare(name string, typ types.DataType) *DeclareInstructi
 func (b *Block) CreatePrint(val []Value) *FunctionCallInstruction {
 	for _, e1 := range val {
 		if e1.Type() != types.DataInstruction && e1.Type() != types.LoadInstruction &&
-			e1.Type() != types.Constant && e1.Type() != types.FunctionCallInstruction {
+			e1.Type() != types.Constant && e1.Type() != types.FunctionCallInstruction &&
+			e1.Type() != types.CastInstruction {
 			panic(fmt.Sprintf("cannot print a %s value", e1.Type().String()))
 		}
 	}

@@ -9,6 +9,7 @@
 package frontend
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -91,7 +92,7 @@ func (l *lexer) Lex(lval *yySymType) int {
 
 // Called by the parser when a parse error is encountered.
 func (l *lexer) Error(e string) {
-	//l.err <- errors.New(e) // TODO: verify that this works.
+	l.err <- errors.New(e)
 }
 
 // newLexer creates and returns a pointer to a new lexer.

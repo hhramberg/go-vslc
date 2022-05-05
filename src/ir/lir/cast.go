@@ -21,7 +21,7 @@ type CastInstruction struct {
 }
 
 // ---------------------
-// ----- CastInstructions -----
+// ----- Constants -----
 // ---------------------
 
 // -------------------
@@ -39,7 +39,7 @@ func (inst *CastInstruction) Id() int {
 
 // Name returns the textual representation of the virtual register Value of the CastInstruction.
 func (inst *CastInstruction) Name() string {
-	return fmt.Sprintf("cast%d", inst.id)
+	return fmt.Sprintf("%s%d", labelDataInstruction, inst.id)
 }
 
 // Type returns the CastInstruction identifying this instruction as a CastInstruction.
@@ -54,7 +54,7 @@ func (inst *CastInstruction) DataType() types.DataType {
 
 // String returns the textual LIR representation of the CastInstruction.
 func (inst *CastInstruction) String() string {
-	return fmt.Sprintf("%s = (%s)%s", inst.Name(), inst.typ.String(), inst.src.Name())
+	return fmt.Sprintf("%s = (%s) %s", inst.Name(), inst.typ.String(), inst.src.Name())
 }
 
 // SetHW panics for the CastInstruction, because it's a memory value, not a virtual register.

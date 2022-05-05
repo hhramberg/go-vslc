@@ -39,8 +39,6 @@ type RegisterFile struct {
 // ----- Constants -----
 // ---------------------
 
-const labelFloat = "_LFLOAT_"
-const labelString = "_STR_"
 const labelMain = "main"                         // String literal of name of main function as defined in the output assembler.
 const labelPrintfInt = "_printf_fmt_int"         // Used by printf to print integers.
 const labelPrintfFloat = "_printf_fmt_float"     // Used by printf to print floats.
@@ -258,14 +256,6 @@ var wordSize = wordSize64 // Default to 64-bit architecture.
 // bitSize defines the bit size of the aarch64 architecture to generate.
 var bitSize = bitSize64 // default to 64-bit architecture.
 
-// floatStrings stores statically, compile time generated, floating point values, written to the data segment.
-var floatStrings = struct {
-	s []string
-	sync.Mutex
-}{
-	s: make([]string, 0, 16), // Expect no more than 16 static floats.
-}
-
 // ---------------------
 // ----- functions -----
 // ---------------------
@@ -348,7 +338,7 @@ func GenArm(opt util.Options, m *lir.Module, root *ir.Node) error {
 	rf := CreateRegisterFile()
 
 	// Generate implicit main function for program entry.
-	if err := genMain(rf, m, callee, &wr); err != nil {
+	if err := genMain(rf, callee, &wr); err != nil {
 		return err
 	}
 
@@ -364,12 +354,6 @@ func GenArm(opt util.Options, m *lir.Module, root *ir.Node) error {
 	for _, e1 := range m.Strings() {
 		wr.Label(e1.Name())
 		wr.Write("\t.asciz\t%q\n", e1.Value())
-	}
-
-	// Generate float constant data.
-	for i1, e1 := range floatStrings.s {
-		wr.Label(fmt.Sprintf("%s%d", labelFloat, i1))
-		wr.Write("\t.xword\t%s\n", e1)
 	}
 
 	// Generate printf format strings.
@@ -388,7 +372,7 @@ func GenArm(opt util.Options, m *lir.Module, root *ir.Node) error {
 // genMain generates an implicit main function that checks input command-line arguments and calls the function callee.
 // After the function callee returns the main function exits the program with the return value of the call to callee.
 // If the return value of callee is a floating point value, the value is cast to integer.
-func genMain(rf RegisterFile, m *lir.Module, callee *lir.Function, wr *util.Writer) error {
+func genMain(rf RegisterFile, callee *lir.Function, wr *util.Writer) error {
 	wr.Write("\n")
 	wr.Label(labelMain)
 
@@ -402,7 +386,7 @@ func genMain(rf RegisterFile, m *lir.Module, callee *lir.Function, wr *util.Writ
 	}
 
 	// Set up stack.
-	sa := wordSize << 1 // argc and argv.
+	sa := 4 // FP, LR, argc and argv.
 	if nf > paramReg {
 		// Add stack for integer arguments being passed to callee.
 		sa += nf - paramReg
@@ -419,120 +403,116 @@ func genMain(rf RegisterFile, m *lir.Module, callee *lir.Function, wr *util.Writ
 		spill += stackAlign - res
 		sa += stackAlign - res
 	}
-	wr.Write("\tsub\t%s, %s, #%d\n", rf.SP().String(), rf.SP().String(), sa)
-	wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regi[r0].String(), rf.SP().String(), sa-wordSize)    // argc.
-	wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regi[r1].String(), rf.SP().String(), sa-wordSize<<1) // argv.
+	fpOffsetArgc := wordSize * 3 // Offset of argc on stack from FP.
+	fpOffsetArgv := wordSize << 2
+	wr.Write("\tsub\t%s, %s, #%d\n", rf.SP().String(), rf.SP().String(), sa) // Adjust SP.
+	wr.Write("\tstp\t%s, %s, [%s, #%d]\n",
+		rf.FP().String(), rf.LR().String(), rf.SP().String(), sa-(wordSize<<1)) // Store FP and LR on top of stack.
+	wr.Write("\tadd\t%s, %s, #%d\n", rf.FP().String(), rf.SP().String(), sa)                  // Set new FP to old SP.
+	wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regi[r0].String(), rf.FP().String(), -fpOffsetArgc) // argc.
+	wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regi[r1].String(), rf.FP().String(), -fpOffsetArgv) // argv.
 
 	// Jump labels for error checking.
-	largcok := util.NewLabel(util.LabelIfEnd) // Jump to label if argc matches parameter count of callee.
-	largverr := util.NewLabel(util.LabelIf)   // Jump to label if parameter is not integer or float.
-	lcall := util.NewLabel(util.LabelJump)    // Jump to label when all parameters are ok.
+	largcok := "_L_argc_ok"     // Jump to label if argc matches parameter count of callee.
+	largverr := "_L_argv_error" // Jump to label if parameter is not integer or float.
+	lcall := "_L_call"          // Jump to label when all parameters are ok.
 
 	// Check parameter count and argc.
-	wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regi[r0].String(), rf.SP().String(), sa-wordSize) // This is bloated, but it's idiomatic to load argc from the stack.
-	wr.Write("\tcmp\t%s, #%d\n", rf.regi[r0].String(), len(callee.Params())+1)              // First argument is application path.
+	wr.Write("\tldr\t%s, [%s, #%d]\n", rf.GetI(r1).String(), rf.FP().String(), -fpOffsetArgc) // This is bloated, but it's idiomatic to load argc from the stack.
+	wr.Write("\tsub\t%s, %s, #%d\n", rf.GetI(r1).String(), rf.GetI(r1).String(), 1)
+	wr.Write("\tcmp\t%s, #%d\n", rf.GetI(r1).String(), len(callee.Params())) // First argument is application path.
 	wr.Write("\tb.eq\t%s\n", largcok)
 
 	// argc is not ok.
-	errstr := callee.CreateGlobalString(fmt.Sprintf("Argument error: expected %d arguments, got %%d\n", len(callee.Params())))
-
-	// Load argc - 1 into r1. It's safe to overwrite r1, because we're not going to use it.
-	wr.Write("\tsub\t%s, %s, #%d\n", rf.regi[r1].String(), rf.regi[r0].String(), 1)
+	var errstr *lir.String
+	if len(callee.Params()) == 1 {
+		errstr = callee.CreateGlobalString("Argument error: expected 1 argument, got %d\n")
+	} else {
+		errstr = callee.CreateGlobalString(fmt.Sprintf("Argument error: expected %d arguments, got %%d\n", len(callee.Params())))
+	}
 
 	// Load format string and call printf.
-	wr.Write("\tadrp\t%s, %s\n", rf.regi[r0].String(), errstr.Name())
-	wr.Write("\tadd\t%s, %s, :lo12:%s\n", rf.regi[r0].String(), rf.regi[r0].String(), errstr.Name())
+	wr.Write("\tadrp\t%s, %s\n", rf.GetI(r0).String(), errstr.Name())
+	wr.Write("\tadd\t%s, %s, :lo12:%s\n", rf.GetI(r0).String(), rf.GetI(r0).String(), errstr.Name())
 	wr.Write("\tbl\tprintf\n")
 
 	// Set return code and return.
-	wr.Write("\tmov\t%s, #%d\n", rf.regi[r0].String(), 1)
+	wr.Write("\tmov\t%s, #%d\n", rf.GetI(r0).String(), 1)
+	wr.Write("\tldp\t%s, %s, [%s, #%d]\n",
+		rf.FP().String(), rf.LR().String(), rf.SP().String(), sa-(wordSize<<1)) // Restore FP and LR before returning.
 	wr.Write("\tadd\t%s, %s, #%d\n", rf.SP().String(), rf.SP().String(), sa)
 	wr.Write("\tret\n")
 
 	// argc is ok.
 	wr.Label(largcok)
 
-	ii := 0           // Number of integer arguments.
-	fi := 0           // Number of floating point arguments.
-	fzero := false    // Set to true if the label for floating point zero has been generated.
-	var flabel string // Label for loading the float constant 0.0.
-	var argvreg regfile.Register
-	if ni > 0 {
-		// Use r8 instead of r0 for argv pointer. r0 is already assigned a parameter.
-		argvreg = rf.GetI(r8)
-	} else {
-		argvreg = rf.GetI(r0)
-	}
-	for i1, e1 := range callee.Params() {
-		// Move char pointer to r0. Increment r1 to next string.
-		wr.Write("\tldr\t%s, [%s, #%d]\n", argvreg.String(), rf.SP().String(), sa-wordSize<<1) // Load argv into r8.
+	if len(callee.Params()) > 0 {
+		ii := 0 // Number of integer arguments provided.
+		fi := 0 // Number of floating point arguments provided.
 
-		if e1.DataType() == i {
-			// Parse argv[i1] as int.
 
-			// Run atoi.
-			wr.Write("\tbl\tatoi\n")
+		// Move argv pointer into register x8.
+		wr.Write("\tldr\t%s, [%s, #%d]\n", rf.GetI(r8).String(), rf.FP().String(), -fpOffsetArgv)
 
-			// Check return value of atoi. Zero means string isn't an integer. Cannot parse "0", because atoi is stupid.
-			wr.Write("\tcmp\t%s, #%d\n", rf.regi[r0].String(), 0)
-			wr.Write("\tmov\t%s, #%d\n", rf.regi[r1].String(), i1+1) // Hack the printf by moving parameter index to r1. Wastes one cycle.
-			wr.Write("\tb.eq\t%s\n", largverr)                       // Got error from atof, branch to argverror.
-			if ii < paramReg {
-				// Store parameter in register.
-				wr.Write("\tmov\t%s, %s\n", rf.regi[r0].String(), rf.regi[ii].String())
+		// Generate arguments from back to front, such that the first argument can be put into x0/d0 without collision.
+		for i1 := len(callee.Params()) - 1; i1 >= 0; i1-- {
+			e1 := callee.Params()[i1]
+
+			if e1.DataType() == types.Int {
+				// Parameter is integer. Use atoi to parse argument.
+
+				// Put the i'th element of argv into x0 for atoi and/or atof.
+				wr.Write("\tldr\t%s, [%s, #%d]\n", rf.GetI(r0).String(), rf.GetI(r8).String(), wordSize*(i1+1))
+
+				// Call atoi.
+				wr.Write("\tbl\tatoi\n")
+
+				// Verify that argument was an integer != 0.
+				wr.Write("\tcbz\tw0, %s\n", largverr) // atoi returns 32-bit int in w0.
+
+				// Argument is good: move result integer to correct register or pass on stack.
+				if ii < paramReg {
+					// Pass in register.
+					dst := rf.GetI(paramReg - ii)
+					if dst.Id() != r0 {
+						wr.Write("\tmov\t%s, %s\n", dst.String(), rf.GetI(r0).String())
+					}
+				} else {
+					// Pass on stack.
+					wr.Write("\tstr\t%s, [%s, #%d]\n", rf.GetI(r0).String(), rf.SP().String(), (ii-paramReg)*wordSize)
+				}
+				ii++
 			} else {
-				// Store parameter on stack.
-				wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regi[r0].String(), rf.LR(), -(spill + wordSize*i1))
-			}
-			ii++
-		} else {
-			// Parse argv[i1] as float.
+				// Parameter is floating point type. Parse argument as float using atof.
 
-			if !fzero {
-				flabel = floatToGlobalString(0.0)
-				fzero = true
-			}
+				// Put the i'th element of argv into x0 for atof.
+				wr.Write("\tldr\t%s, [%s, #%d]\n", rf.GetI(r0).String(), rf.GetI(r8).String(), wordSize*i1)
 
-			// Run atoi.
-			wr.Write("\tbl\tatof\n")
+				// Call atof.
+				wr.Write("\tbl\tatof\n")
 
-			// Check return value of atof. 0.0 means string isn't a float. Cannot parse "0.0", because atof is stupid.
-			loadFloatToRegister(flabel, rf.GetF(v1), wr) // Move 0.0 into v1.
-			wr.Write("\tfcmp\t%s, %s\n", rf.regf[v0].String(), rf.regf[v1].String())
-			wr.Write("\tmov\t%s, #%d\n", rf.regi[r1].String(), i1+1) // Hack the printf by moving parameter index to r1. Wastes one cycle.
-			wr.Write("\tb.eq\t%s\n", largverr)                       // Got error from atof, branch to argverror.
-			if fi < paramReg {
-				// Store parameter in register.
-				wr.Write("\tmov\t%s, %s\n", rf.regf[v0].String(), rf.regf[fi].String())
-			} else {
-				// Store parameter on stack.
-				wr.Write("\tstr\t%s, [%s, #%d]\n", rf.regf[v0].String(), rf.LR(), -(spill + wordSize*i1))
+				// Verify that argument was a float != 0.0.
+				wr.Write("\tfcmp\t%s, #0.0\n", rf.GetI(v0).String(), largverr)
+				wr.Write("\tb.eq\t%s\n", largverr)
+
+				// Pass floating point argument either in register or on stack.
+				if fi < paramReg {
+					// Pass in register.
+					dst := rf.GetF(paramReg - fi)
+					if dst.Id() != v0 {
+						wr.Write("\tmov\t%s, %s\n", dst.String(), rf.GetF(v0).String())
+					}
+				} else {
+					// Pass on stack.
+					wr.Write("\tstr\t%s, [%s, #%d]\n", rf.GetI(v0).String(), rf.SP().String(), (fi-paramReg)*wordSize)
+				}
+				fi++
 			}
-			fi++
 		}
-
-		// Increment argv and store on stack.
-		wr.Write("\tadd\t%s, %s, #%d\n", argvreg.String(), rf.regi[r8].String(), wordSize)     // Increment argv.
-		wr.Write("\tstr\t%s, [%s, #%d]\n", argvreg.String(), rf.SP().String(), sa-wordSize<<1) // Store argv++.
 	}
 
 	// When done with parameters, cause program to jump to call function under the argv error handling logic.
 	wr.Write("\tb\t%s\n", lcall)
-
-	// argv errors jump here.
-	wr.Label(largverr)
-	idx := len(m.Strings())
-	errstr = callee.CreateGlobalString(fmt.Sprintf("Argument error: argument %d is either not int or float\n", idx))
-
-	// Load format string and call printf.
-	wr.Write("\tadrp\t%s, %s%d\n", rf.regi[r0].String(), errstr.Name())
-	wr.Write("\tadd\t%s, %s, :lo12:%s%d\n", rf.regi[r0].String(), rf.regi[r0].String(), errstr.Name())
-	wr.Write("\tbl\tprintf\n")
-
-	// Set return code and return.
-	wr.Write("\tmov\t%s, #%d\n", rf.regi[r0].String(), 1)
-	wr.Write("\tadd\t%s, %s, #%d\n", rf.SP().String(), rf.SP().String(), sa)
-	wr.Write("\tret\n")
 
 	// Go here when ready to call callee.
 	wr.Label(lcall)
@@ -544,8 +524,29 @@ func genMain(rf RegisterFile, m *lir.Module, callee *lir.Function, wr *util.Writ
 	}
 
 	// De-allocate stack and return, result from callee is already in r0.
+	wr.Write("\tldp\t%s, %s, [%s, #%d]\n",
+		rf.FP().String(), rf.LR().String(), rf.SP().String(), sa-(wordSize<<1)) // Restore FP and LR before returning.
 	wr.Write("\tadd\t%s, %s, #%d\n", rf.SP().String(), rf.SP().String(), sa)
 	wr.Write("\tret\n")
+
+	if len(callee.Params()) > 0 {
+
+		// argv errors jump here.
+		wr.Label(largverr)
+		errstr = callee.CreateGlobalString("Argument error: one or more argument(s) is either not int or float\n")
+
+		// Load format string and call printf.
+		wr.Write("\tadrp\t%s, %s\n", rf.regi[r0].String(), errstr.Name())
+		wr.Write("\tadd\t%s, %s, :lo12:%s\n", rf.regi[r0].String(), rf.regi[r0].String(), errstr.Name())
+		wr.Write("\tbl\tprintf\n")
+
+		// Set return code and return.
+		wr.Write("\tmov\t%s, #%d\n", rf.GetI(r0).String(), 1)
+		wr.Write("\tldp\t%s, %s, [%s, #%d]\n",
+			rf.FP().String(), rf.LR().String(), rf.SP().String(), sa-(wordSize<<1)) // Restore FP and LR before returning.
+		wr.Write("\tadd\t%s, %s, #%d\n", rf.SP().String(), rf.SP().String(), sa)
+		wr.Write("\tret\n")
+	}
 	return nil
 }
 
@@ -569,23 +570,6 @@ func CreateRegisterFile() RegisterFile {
 		}
 	}
 	return rf
-}
-
-// floatToGlobalString takes a float immediate and generates a compile time float constant for the data segment.
-// The label is returned.
-func floatToGlobalString(fl float64) string {
-	floatStrings.Lock()
-	idx := len(floatStrings.s)
-	label := fmt.Sprintf("%s%d", labelString, idx)
-	floatStrings.s = append(floatStrings.s, fmt.Sprintf("%x", fl))
-	floatStrings.Unlock()
-	return label
-}
-
-// loadFloatToRegisters generates aarch64 assembler for loading an existing float label into register r.
-func loadFloatToRegister(label string, r regfile.Register, wr *util.Writer) {
-	wr.Write("\tadrp\t%s, %s\n", r.String(), label)
-	wr.Write("\tadd\t%s, %s, :lo12:%s\n", r.String(), r.String(), label)
 }
 
 // ----------------------------

@@ -29,7 +29,7 @@ type Module struct {
 // ---------------------
 
 // labelString defines the prefix for globally declared static strings.
-const labelString = "_"
+const labelString = "_STR_"
 
 // defaultModuleName defines the default name of any newly created Modules where no name was provided at time of creation.
 const defaultModuleName = "LIR Module"

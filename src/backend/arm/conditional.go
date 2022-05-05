@@ -1,7 +1,6 @@
 package arm
 
 import (
-	"errors"
 	"fmt"
 	"vslc/src/backend/regfile"
 	"vslc/src/ir/lir"
@@ -71,15 +70,5 @@ func genBranch(v *lir.BranchInstruction, rf regfile.RegisterFile, wr *util.Write
 	default:
 		return fmt.Errorf("unexpected logical operation: %d", v.Operator())
 	}
-	return nil
-}
-
-// genContinue generates aarch64 unconditional branch instruction to jump to the last inserted label in the label stack.
-func genContinue(wr *util.Writer, ls *util.Stack) error {
-	b := ls.Peek()
-	if b == nil {
-		return errors.New("compiler error: label stack is empty")
-	}
-	wr.Label(b.(*lir.Block).Name())
 	return nil
 }

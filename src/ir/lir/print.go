@@ -173,3 +173,8 @@ func (inst *VaList) Disable() {
 func (inst *VaList) IsEnabled() bool {
 	return inst.en
 }
+
+// Values returns the values pointed to by the VaList.
+func (inst *VaList) Values() []Value {
+	return inst.vars
+}

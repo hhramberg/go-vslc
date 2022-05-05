@@ -199,19 +199,19 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 				// This thread should do one extra residual job.
 				end++
 			}
-			// Give each thread its own builder, else there will be multiple threads writing different functions,
-			// interchanging basic blocks concurrently.
-			tb := ctx.NewBuilder()
 
-			go func(start, end int, b llvm.Builder, wg *sync.WaitGroup, cerr chan error) {
+			go func(start, end int, wg *sync.WaitGroup, cerr chan error) {
 				defer wg.Done()
+				// Give each thread its own builder, else there will be multiple threads writing different functions,
+				// interchanging basic blocks concurrently.
+				b := ctx.NewBuilder()
 				defer b.Dispose()
 				for _, e1 := range funcs[start:end] {
 					if err := genFuncBody(b, m, e1.ll, e1.node); err != nil {
 						cerr <- err
 					}
 				}
-			}(start, end, tb, &wg, cerr)
+			}(start, end, &wg, cerr)
 
 			start = end
 			end += n
@@ -288,11 +288,6 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 
 	m.SetDataLayout(td.String())
 	m.SetTarget(tm.Triple())
-
-	// Run optimisation passes.
-	//pm := llvm.NewPassManager()
-	//pm.Run(m)
-	//pm.Dispose()
 
 	// Set target file type.
 	ft := llvm.ObjectFile
@@ -454,7 +449,7 @@ func genFuncHeader(m llvm.Module, n *ast.Node) (llvm.Value, error) {
 	}
 
 	// Declare function in module m.
-	fun := llvm.AddFunction(m, name, ftyp)
+	fun := llvm.AddFunction(m, name, ftyp) // TODO: sigseg during parallel run.
 
 	// Set parameter names.
 	for i1, e1 := range fun.Params() {
@@ -476,6 +471,23 @@ func genFuncBody(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node) err
 	bb := llvm.AddBasicBlock(fun, "")
 	b.SetInsertPointAtEnd(bb)
 
+	// Allocate memory for the function's parameters.
+	fscope := symTab{
+		m:       make(map[string]llvm.Value),
+		RWMutex: sync.RWMutex{},
+	}
+	for _, e1 := range fun.Params() {
+		alloc := b.CreateAlloca(e1.Type(), "") // Allocate stack memory for parameter e1. TODO: Sigseg during parallel.
+		b.CreateStore(e1, alloc)               // Store the value passed to parameter e1 to stack.
+		fscope.Lock()
+		fscope.m[e1.Name()] = alloc            // Put variable holding parameter e1 on scope stack.
+		fscope.Unlock()
+	}
+
+	// Push the function parameters to the bottom of the stack.
+	st.Push(&fscope)
+	defer st.Pop()
+
 	// Generate function body recursively.
 	if _, err := gen(b, m, fun, n, &st, &ls); err != nil {
 		return err
@@ -490,7 +502,6 @@ func genExpression(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, s
 
 	if n.Data == nil {
 		// Function call.
-		c2 := n.Children[1].Children[0] // ast.EXPRESSION_LIST. List with all arguments.
 		name := c1.Data.(string)
 		var target llvm.Value
 
@@ -502,32 +513,41 @@ func genExpression(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, s
 		params := target.Params()
 		args := make([]llvm.Value, len(params))
 
-		if len(args) != len(c2.Children) {
+		if len(n.Children[1].Children) == 0 && len(params) != 0 {
 			return llvm.Value{}, fmt.Errorf("function %q expects %d parameters, got %d",
-				name, len(args), len(c2.Children))
+				name, len(args), len(n.Children[1].Children))
 		}
+		if len(n.Children[1].Children) > 0 {
 
-		for i1, e1 := range c2.Children {
-			// Load argument.
-			switch e1.Typ {
-			case ast.INTEGER_DATA:
-				args[i1] = llvm.ConstInt(i, uint64(e1.Data.(int)), true)
-			case ast.FLOAT_DATA:
-				args[i1] = llvm.ConstFloat(f, e1.Data.(float64))
-			case ast.EXPRESSION:
-				if r, err := genExpression(b, m, fun, e1, st); err != nil {
-					return llvm.Value{}, err
-				} else {
-					args[i1] = r
-				}
-			case ast.IDENTIFIER_DATA:
-				if r, err := genLoad(e1.Data.(string), b, m, fun, st); err != nil {
-					return llvm.Value{}, err
-				} else {
-					args[i1] = r
+			c2 := n.Children[1].Children[0] // ast.EXPRESSION_LIST. List with all arguments.
+			if len(args) != len(c2.Children) {
+				return llvm.Value{}, fmt.Errorf("function %q expects %d parameters, got %d",
+					name, len(args), len(c2.Children))
+			}
+
+			for i1, e1 := range c2.Children {
+				// Load argument.
+				switch e1.Typ {
+				case ast.INTEGER_DATA:
+					args[i1] = llvm.ConstInt(i, uint64(e1.Data.(int)), true)
+				case ast.FLOAT_DATA:
+					args[i1] = llvm.ConstFloat(f, e1.Data.(float64))
+				case ast.EXPRESSION:
+					if r, err := genExpression(b, m, fun, e1, st); err != nil {
+						return llvm.Value{}, err
+					} else {
+						args[i1] = r
+					}
+				case ast.IDENTIFIER_DATA:
+					if r, err := genLoad(e1.Data.(string), b, m, fun, st); err != nil {
+						return llvm.Value{}, err
+					} else {
+						args[i1] = r
+					}
 				}
 			}
 		}
+
 		return b.CreateCall(target, args, ""), nil
 	}
 	if len(n.Children) == 2 {
@@ -692,13 +712,13 @@ func genAssign(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, st *u
 
 	switch c1.Typ {
 	case ast.INTEGER_DATA:
-		tmp1 := llvm.ConstInt(i, uint64(c1.Data.(int)), true)
-		if err := genStore(tmp1, name, b, m, fun, st); err != nil {
+		cnst := llvm.ConstInt(i, uint64(c1.Data.(int)), true)
+		if err := genStore(cnst, name, b, m, fun, st); err != nil {
 			return err
 		}
 	case ast.FLOAT_DATA:
-		tmp1 := llvm.ConstFloat(f, float64(c1.Data.(float32)))
-		if err := genStore(tmp1, name, b, m, fun, st); err != nil {
+		cnst := llvm.ConstFloat(f, c1.Data.(float64))
+		if err := genStore(cnst, name, b, m, fun, st); err != nil {
 			return err
 		}
 	case ast.EXPRESSION:
@@ -974,6 +994,7 @@ func genWhile(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node, st, ls
 	ls.Push(head)
 
 	// Generate relation and branch.
+	b.CreateBr(head)
 	b.SetInsertPointAtEnd(head)
 	rel, err := genRelation(b, m, fun, n.Children[0], st)
 	if err != nil {
@@ -1013,29 +1034,35 @@ func genContinue(b llvm.Builder, ls *util.Stack) error {
 // genStore generates LLVM IR store instruction that stores the src llvm.Value in the requested identifier with
 // given name.
 func genStore(src llvm.Value, name string, b llvm.Builder, m llvm.Module, fun llvm.Value, st *util.Stack) error {
-	// Check local scopes.
+	// Check local scopes. Function parameters are on the bottom of the scope stack.
 	for i1 := 1; i1 <= st.Size(); i1++ {
 		if symtab := st.Get(i1).(*symTab); symtab != nil {
-			if val, ok := symtab.m[name]; ok {
-				_ = b.CreateStore(src, val)
+			if dst, ok := symtab.m[name]; ok {
+				if src.Type() != dst.Type() {
+					if dst.Type() == i {
+						src = b.CreateSIToFP(src, i, "")
+					} else {
+						src = b.CreateSIToFP(src, f, "")
+					}
+				}
+				_ = b.CreateStore(src, dst)
 				return nil
 			}
 		}
 	}
 
-	// Check function parameters.
-	for _, e1 := range fun.Params() {
-		if e1.Name() == name {
-			_ = b.CreateStore(src, e1)
-			return nil
-		}
-	}
-
 	// Check global scope.
-	if val := m.NamedGlobal(name); val.IsNil() {
+	if dst := m.NamedGlobal(name); dst.IsNil() {
 		return fmt.Errorf("undeclared variable %q", name)
 	} else {
-		_ = b.CreateStore(src, val)
+		if src.Type() != dst.Type().ElementType() {
+			if dst.Type() == i {
+				src = b.CreateSIToFP(src, i, "")
+			} else {
+				src = b.CreateSIToFP(src, f, "")
+			}
+		}
+		_ = b.CreateStore(src, dst)
 		return nil
 	}
 }
@@ -1043,19 +1070,12 @@ func genStore(src llvm.Value, name string, b llvm.Builder, m llvm.Module, fun ll
 // genLoad generates LLVM IR load instruction for the requested identifier with given name and returns the
 // resulting llvm.Value.
 func genLoad(name string, b llvm.Builder, m llvm.Module, fun llvm.Value, st *util.Stack) (llvm.Value, error) {
-	// Check local scopes.
+	// Check local scopes. Function parameters are on the bottom of the scope stack.
 	for i1 := 1; i1 <= st.Size(); i1++ {
 		if symtab := st.Get(i1).(*symTab); symtab != nil {
-			if val, ok := symtab.m[name]; ok {
-				return b.CreateLoad(val, ""), nil
+			if src, ok := symtab.m[name]; ok {
+				return b.CreateLoad(src, ""), nil
 			}
-		}
-	}
-
-	// Check function parameters.
-	for _, e1 := range fun.Params() {
-		if e1.Name() == name {
-			return e1, nil
 		}
 	}
 
@@ -1127,9 +1147,9 @@ func genMain(b llvm.Builder, m llvm.Module, n *ast.Node) error {
 	main.Param(1).SetName("argv")
 	bb := llvm.AddBasicBlock(main, "")
 	b.SetInsertPointAtEnd(bb)
-	argcGood := llvm.AddBasicBlock(main, "")
-	argcBad := llvm.AddBasicBlock(main, "")
-	argvBad := llvm.AddBasicBlock(main, "")
+	argcGood := llvm.AddBasicBlock(main, "argcGood")
+	argcBad := llvm.AddBasicBlock(main, "argcBad")
+	var argvBad llvm.BasicBlock
 
 	// Verify arguments before calling VSL function.
 	argc := b.CreateSub(main.Param(0), llvm.ConstInt(i, 1, true), "")
@@ -1151,47 +1171,50 @@ func genMain(b llvm.Builder, m llvm.Module, n *ast.Node) error {
 	// Compile time indexer.
 	idx := 0
 
-	for _, e1 := range callee.Children[2].Children {
-		// Typed variable list.
-		typ, err := genType(e1)
-		if err != nil {
-			return err
-		}
-		if typ == i && atoi.IsAFunction().IsNil() {
-			atoi = genAtoi(m)
-		} else if atof.IsAFunction().IsNil() {
-			atof = genAtof(m)
-		}
-
-		for range e1.Children {
-			// For all identifiers. Try parsing string to float or integer.
-
-			// Create pointer to argv[i1].
-			ptr := b.CreateGEP(
-				argv,
-				[]llvm.Value{
-					i1,
-				},
-				"")
-
-			var param llvm.Value
-			newBB := llvm.AddBasicBlock(main, "")
-			if typ == i {
-				param = b.CreateCall(atoi, []llvm.Value{b.CreateLoad(ptr, "")}, "")
-				cmp = b.CreateICmp(llvm.IntEQ, llvm.ConstInt(i, 0, false), param, "")
-				b.CreateCondBr(cmp, argvBad, newBB)
-			} else {
-				param = b.CreateCall(atof, []llvm.Value{b.CreateLoad(ptr, "")}, "")
-				cmp = b.CreateFCmp(llvm.FloatOEQ, llvm.ConstFloat(f, 0.0), param, "")
-				b.CreateCondBr(cmp, argvBad, newBB)
+	if len(callee.Children[2].Children) > 0 {
+		argvBad = llvm.AddBasicBlock(main, "argvBad")
+		for _, e1 := range callee.Children[2].Children {
+			// Typed variable list.
+			typ, err := genType(e1)
+			if err != nil {
+				return err
 			}
-			b.SetInsertPointAtEnd(newBB)
-			if idx < len(fun.Params())-1 {
-				//ptr = b.CreateAdd(ptr, llvm.ConstInt(i, ib, false), "")
+			if typ == i && atoi.IsAFunction().IsNil() {
+				atoi = genAtoi(m)
+			} else if atof.IsAFunction().IsNil() {
+				atof = genAtof(m)
 			}
-			args[idx] = param
-			idx++
-			i1 = b.CreateAdd(i1, llvm.ConstInt(i, 1, false), "")
+
+			for range e1.Children {
+				// For all identifiers. Try parsing string to float or integer.
+
+				// Create pointer to argv[i1].
+				ptr := b.CreateGEP(
+					argv,
+					[]llvm.Value{
+						i1,
+					},
+					"")
+
+				var param llvm.Value
+				newBB := llvm.AddBasicBlock(main, "")
+				if typ == i {
+					param = b.CreateCall(atoi, []llvm.Value{b.CreateLoad(ptr, "")}, "")
+					cmp = b.CreateICmp(llvm.IntEQ, llvm.ConstInt(i, 0, false), param, "")
+					b.CreateCondBr(cmp, argvBad, newBB)
+				} else {
+					param = b.CreateCall(atof, []llvm.Value{b.CreateLoad(ptr, "")}, "")
+					cmp = b.CreateFCmp(llvm.FloatOEQ, llvm.ConstFloat(f, 0.0), param, "")
+					b.CreateCondBr(cmp, argvBad, newBB)
+				}
+				b.SetInsertPointAtEnd(newBB)
+				if idx < len(fun.Params())-1 {
+					//ptr = b.CreateAdd(ptr, llvm.ConstInt(i, ib, false), "")
+				}
+				args[idx] = param
+				idx++
+				i1 = b.CreateAdd(i1, llvm.ConstInt(i, 1, false), "")
+			}
 		}
 	}
 
@@ -1212,19 +1235,22 @@ func genMain(b llvm.Builder, m llvm.Module, n *ast.Node) error {
 	pf := m.NamedFunction("printf")
 	if pf.IsAFunction().IsNil() {
 		genPrintf(m)
+		pf = m.NamedFunction("printf")
 	}
 
-	b.SetInsertPointAtEnd(argvBad)
-	errMsg := b.CreateGlobalStringPtr(
-		"failed to parse argument\n",
-		stringPrefix)
-	b.CreateCall(pf, []llvm.Value{errMsg}, "")
-	b.CreateRet(llvm.ConstInt(i, 1, false))
+	if len(callee.Children[2].Children) > 0 {
+		b.SetInsertPointAtEnd(argvBad)
+		errMsg := b.CreateGlobalStringPtr(
+			"failed to parse argument\n",
+			stringPrefix)
+		b.CreateCall(pf, []llvm.Value{errMsg}, "")
+		b.CreateRet(llvm.ConstInt(i, 1, false))
+	}
 
 	// Generate argc mismatch.
 	b.SetInsertPointAtEnd(argcBad)
 
-	errMsg = b.CreateGlobalStringPtr(
+	errMsg := b.CreateGlobalStringPtr(
 		fmt.Sprintf("argument count mismatch, expected %d, got %%d\n", len(fun.Params())),
 		stringPrefix)
 	errArgs := []llvm.Value{errMsg, argc}
@@ -1321,7 +1347,7 @@ func genTargetTriple(opt *util.Options) (llvm.Target, string, error) {
 
 		// Target abi/environment.
 		sb.WriteRune('-')
-		sb.WriteString("gnu") // Default to GNU for now. TODO: Improve?
+		sb.WriteString("gnu") // Default to GNU for now.
 
 		triple = sb.String()
 	}

@@ -99,13 +99,8 @@ func genFunction(fun *lir.Function, wr *util.Writer) error {
 		// Write label for basic block.
 		wr.Label(e1.Name())
 		for _, e2 := range e1.Instructions() {
-			// TODO: Generate instructions.
 			switch e2.Type() {
 			case types.DataInstruction:
-				if e2.DataType() == types.String {
-					// TODO: Handle strings exclusively.
-					break
-				}
 				if e2.DataType() == types.VaList {
 					// TODO: handle valist exclusively.
 					break

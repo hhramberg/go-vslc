@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 	"vslc/src/backend"
 	lir2 "vslc/src/backend/lir"
 	"vslc/src/ir/lir"
@@ -63,8 +64,11 @@ func run(opt util.Options) error {
 	if err != nil {
 		return err
 	}
-	return nil // TODO: Delete.
-	fmt.Println(m.String())
+
+	if opt.Verbose {
+		fmt.Println("\nLIR intermediate representation:")
+		fmt.Println(m.String())
+	}
 
 	// Allocate hardware registers to LIR virtual registers.
 	if err := lir2.AllocateRegisters(opt, m); err != nil {
@@ -89,6 +93,10 @@ func main() {
 	wg := sync.WaitGroup{}
 
 	// Initiate output writer.
+	if opt.LLVM && opt.TokenStream {
+		fmt.Println("Error: cannot run token stream and LLVM generation at the same time.")
+		os.Exit(1)
+	}
 	if !opt.LLVM {
 		// Writing LLVM generated object code in parallel is outside the scope of this project.
 		if len(opt.Out) > 0 {
@@ -118,7 +126,7 @@ func main() {
 	}
 
 	// Wait for code generation to complete.
-	wg.Wait()               // TODO: Make this such that it works.
-	//time.Sleep(250*time.Millisecond) // TODO: Delete.
+	wg.Wait() // TODO: Make this such that it works.
+	time.Sleep(250*time.Millisecond) // TODO: Delete.
 	os.Exit(ret)
 }

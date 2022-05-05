@@ -89,7 +89,7 @@ func (inst *BranchInstruction) Operand1() Value {
 
 // Operand2 returns the second operand of conditional BranchInstruction.
 func (inst *BranchInstruction) Operand2() Value {
-	return inst.op1
+	return inst.op2
 }
 
 // Enable enables the instruction, resulting in that it will be printed using Module.String.

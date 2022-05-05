@@ -105,125 +105,111 @@ func genExpression(v *lir.DataInstruction, wr *util.Writer) error {
 func genFunctionCall(v *lir.FunctionCallInstruction, rf regfile.RegisterFile, wr *util.Writer) error {
 
 	// Check if we need to pass arguments on stack.
-	nargs := len(v.Arguments()) // Number of arguments.
+	nargs := 0
+	ni := 0 // Number of integer arguments.
+	nf := 0 // Number of float arguments.
+
+	for _, e1 := range v.Arguments() {
+		if e1.DataType() == types.VaList {
+			nargs += len(e1.(*lir.VaList).Values())
+			for _, e2 := range e1.(*lir.VaList).Values() {
+				if e2.DataType() == types.String || e2.DataType() == types.Int {
+					ni++
+				} else {
+					nf++
+				}
+			}
+		} else {
+			nargs++
+			if e1.DataType() == types.Int || e1.DataType() == types.String {
+				ni++
+			} else {
+				nf++
+			}
+		}
+	}
 	stack := 0
-	if nargs > paramReg {
-		// Worst case is everything is same datatype.
-		stack = nargs - paramReg
-		spill := stack % stackAlign
-		if spill != 0 {
-			stack += stackAlign - spill
+	if ni > paramReg {
+		stack += paramReg - ni
+	}
+	if nf > paramReg {
+		stack += paramReg - nf
+	}
+	if stack > 0 {
+		stack *= wordSize
+		res := stack % stackAlign
+		if res != 0 {
+			stack += stackAlign - res
 		}
 		wr.Write("\tsub\t%s, %s, #%d\n", rf.SP().String(), rf.SP().String(), stack)
 	}
 
-	ii := 1 // Number of integer arguments.
-	fi := 1 // Number of float arguments.
+	if len(v.Arguments()) > 0 {
+		ii := 0 // Index of current or last integer argument.
+		fi := 0 // Index of current or last float argument.
 
-	// Move arguments[1:] first, because a0 and v0 are used for intermediate operations during operand casting.
-	if len(v.Arguments()[1:]) > 0 {
+		// Generate argument passing.
 		for i1, e1 := range v.Arguments() {
-			// Expression list.
+			arg := e1
 			param := v.Target().Params()[i1]
-			reg := e1.GetHW().(*lir.LiveNode).Reg.(regfile.Register)
 
-			// TODO: How does this go with strings?
-			if param.DataType() == i {
-				// Require integer. Cast float to integer.
-				switch e1.DataType() {
-				case types.Int, types.String:
-					if ii < paramReg {
-						// Put constant in register.
-						wr.Write("\tmov\t%s, %s\n", rf.GetI(r0+ii), reg.String())
-					} else {
-						// Put constant on stack.
-						pos := ii - paramReg
-						if fi >= paramReg {
-							pos += fi - paramReg
-						}
-						wr.Write("\tstr\t%s, [%s, #%d]\n", reg.String(), rf.SP().String(), pos)
-					}
-					ii++
-				case types.Float:
-					// Cast float to integer.
-					if ii < paramReg {
-						// Put argument in register.
-						wr.Write("\tfcvtzs\t%s, %s\n", rf.GetI(r0+ii), reg.String())
-					} else {
-						// Store immediate on stack.
-						pos := ii - paramReg
-						if fi >= paramReg {
-							pos += fi - paramReg
-						}
-						wr.Write("\tfcvtzs\t%s, %s\n", rf.GetI(a0), reg.String()) // Use a0 as temporary register.
-						wr.Write("\tstr\t%s, [%s, #%d]\n", rf.GetI(a0), rf.SP().String(), pos)
-					}
-					ii++
-				default:
-					return fmt.Errorf("unexpected function argument, got data type %s",
-						e1.DataType().String())
+			if param.DataType() == types.Int || param.DataType() == types.String {
+				if ii < paramReg {
+					// Use integer registers.
+					wr.Write("\tmov\t%s, %s\n",
+						rf.GetI(ii), arg.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String())
+				} else {
+					// Put on stack.
+					wr.Write("\tstr\t%s, [%s, #%d]\n",
+						arg.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String(), rf.SP().String(), nargs-1)
 				}
-			} else if param.DataType() == types.Float{
-				// Require float. Cast integer to float.
-				switch e1.DataType() {
-				case types.Int:
-					// Cast integer to float.
-					if fi < paramReg {
-						// Put in register.
-						wr.Write("\tsvctf\t%s, %s\n", rf.GetF(v0+fi).String(), reg.String())
-					} else {
-						// Put on stack.
-						pos := fi - paramReg
-						if fi >= paramReg {
-							pos += fi - paramReg
-						}
-						wr.Write("\tsvctf\t%s, %s\n", rf.GetF(v0).String(), reg.String())
-						wr.Write("\tstr\t%s, [%s, #%d]\n", rf.GetF(v0), rf.SP().String(), pos)
-					}
-					fi++
-				case types.Float:
-					if fi < paramReg {
-						wr.Write("\tmov\t%s, %s\n", rf.GetF(v0+fi), reg.String())
-					} else {
-						// Put constant on stack.
-						pos := ii - paramReg
-						if fi >= paramReg {
-							pos += fi - paramReg
-						}
-						wr.Write("\tstr\t%s, [%s, #%d]\n", reg.String(), rf.SP().String(), pos)
-					}
-					fi++
-				default:
-					return fmt.Errorf("unexpected function argument, got data type %s",
-						e1.DataType().String())
+				ii++
+				nargs--
+			} else if arg.DataType() == types.Float {
+				if fi < paramReg {
+					// Use float registers.
+					wr.Write("\tmov\t%s, %s\n",
+						rf.GetF(fi), arg.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String())
+				} else {
+					// Put on stack.
+					wr.Write("\tstr\t%s, [%s, #%d]\n",
+						arg.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String(), rf.SP().String(), nargs-1)
 				}
-			}else{
-				// Require string.
-				// TODO: Handle.
+				fi++
+				nargs--
+			} else if arg.DataType() == types.VaList {
+				// VaList is used exclusively by calls to printf.
+				for _, e2 := range arg.(*lir.VaList).Values() {
+					varg := e2.GetHW().(*lir.LiveNode).Reg.(regfile.Register)
+					if e2.DataType() == types.Int || e2.DataType() == types.String {
+						// Int or strings.
+						if fi < paramReg {
+							// Move to register.
+							wr.Write("\tmov\t%s, %s\n", rf.GetI(ii).String(), varg.String())
+						} else {
+							// Pass on stack.
+							wr.Write("\tstr\t%s, [%s, #%d]\n", varg.String(), rf.SP().String(), nargs-1)
+						}
+						ii++
+						nargs--
+					} else {
+						// Float.
+						if fi < paramReg {
+							// Move to register.
+							wr.Write("\tmov\t%s, %s\n", rf.GetF(fi).String(), varg.String())
+						} else {
+							// Pass on stack.
+							wr.Write("\tstr\t%s, [%s, #%d]\n", varg.String(), rf.SP().String(), nargs-1)
+						}
+						fi++
+						nargs--
+					}
+				}
+			} else {
+				return fmt.Errorf("cannot create function call assembler: unexpected data type: %s",
+					arg.DataType().String())
 			}
-		}
 
-		// Move argument r0 and v0 last, because they were used as temporaries during operand casting.
-		param := v.Target().Params()[0]
-		reg := v.Arguments()[0].GetHW().(*lir.LiveNode).Reg.(regfile.Register)
-		if param.DataType() == types.Int {
-			// Require integer.
-			switch v.Arguments()[0].DataType() {
-			case types.Int, types.String:
-				wr.Write("\tmov\t%s, %s\n", rf.GetI(a0), reg.String())
-			case types.Float:
-				// Cast float to int and move.
-				wr.Write("\tfcvtzs\t%s, %s\n", rf.GetI(a0), reg.String()) // Use a0 as temporary register.
-			}
-		} else {
-			// Require float.
-			switch v.Arguments()[0].DataType() {
-			case types.Int, types.String:
-				// Cast int to float and move.
-				wr.Write("\tscvtf\t%s, %s\n", rf.GetF(v0), reg.String()) // Use a0 as temporary register.
-			case types.Float:
-				wr.Write("\tmov\t%s, %s\n", rf.GetF(v0), reg.String())
-			}
 		}
 	}
 
@@ -231,8 +217,7 @@ func genFunctionCall(v *lir.FunctionCallInstruction, rf regfile.RegisterFile, wr
 	wr.Write("\tbl\t%s\n", v.Target().Name())
 
 	// De-allocate stack for arguments, if any.
-	if nargs > paramReg {
-		stack = nargs - paramReg
+	if stack > 0 {
 		wr.Write("\tadd\t%s, %s, #%d\n", rf.SP().String(), rf.SP().String(), stack)
 	}
 	return nil

@@ -82,7 +82,7 @@ func nodeInit(typ ir.NodeType, data interface{}, line, pos int, args ...yySymTyp
 		}
 	case ir.FLOAT_DATA:
 		if num, err := parseFloat(data); err == nil {
-			n.Data = float64(num)
+			n.Data = num
 		} else {
 			fmt.Println(err)
 			n.Data = data.(string)
