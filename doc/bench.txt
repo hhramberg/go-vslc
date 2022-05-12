@@ -1,16 +1,273 @@
 goos: linux
 goarch: amd64
 pkg: vslc/src
-BenchmarkAarch64/aamanyfuncs.vsl-threads=1-4         	      66	  16415361 ns/op
-BenchmarkAarch64/aamanyfuncs.vsl-threads=2-4         	      93	  12767695 ns/op
-BenchmarkAarch64/aamanyfuncs.vsl-threads=3-4         	panic: interface conversion: interface {} is , not float64
+BenchmarkAarch64/aamanyfuncs.vsl-threads=1-4         	      70	  16166000 ns/op
+BenchmarkAarch64/aamanyfuncs.vsl-threads=2-4         	      86	  12475245 ns/op
+BenchmarkAarch64/aamanyfuncs.vsl-threads=3-4         	      79	  12718939 ns/op
+BenchmarkAarch64/aamanyfuncs.vsl-threads=4-4         	      97	  12488490 ns/op
+BenchmarkAarch64/bitops.vsl-threads=1-4              	    1956	    648533 ns/op
+BenchmarkAarch64/bitops.vsl-threads=2-4              	    1453	    850665 ns/op
+BenchmarkAarch64/bitops.vsl-threads=3-4              	    1472	    794611 ns/op
+BenchmarkAarch64/bitops.vsl-threads=4-4              	    1556	    777414 ns/op
+BenchmarkAarch64/cast.vsl-threads=1-4                	    2894	    439283 ns/op
+BenchmarkAarch64/cast.vsl-threads=2-4                	    2319	    627869 ns/op
+BenchmarkAarch64/cast.vsl-threads=3-4                	    1880	    649370 ns/op
+BenchmarkAarch64/cast.vsl-threads=4-4                	    2419	    664438 ns/op
+BenchmarkAarch64/easy.vsl-threads=1-4                	    1557	    731410 ns/op
+BenchmarkAarch64/easy.vsl-threads=2-4                	    1298	    906822 ns/op
+BenchmarkAarch64/easy.vsl-threads=3-4                	    1675	    872007 ns/op
+BenchmarkAarch64/easy.vsl-threads=4-4                	    1711	    885085 ns/op
+BenchmarkAarch64/escapecodes.vsl-threads=1-4         	    4794	    349761 ns/op
+BenchmarkAarch64/escapecodes.vsl-threads=2-4         	    3616	    476051 ns/op
+BenchmarkAarch64/escapecodes.vsl-threads=3-4         	    3529	    485763 ns/op
+BenchmarkAarch64/escapecodes.vsl-threads=4-4         	    3368	    476405 ns/op
+BenchmarkAarch64/euclid.vsl-threads=1-4              	    2442	    613129 ns/op
+BenchmarkAarch64/euclid.vsl-threads=2-4              	    1728	    886161 ns/op
+BenchmarkAarch64/euclid.vsl-threads=3-4              	    1791	    844255 ns/op
+BenchmarkAarch64/euclid.vsl-threads=4-4              	    1731	    841582 ns/op
+BenchmarkAarch64/fibonacci_iterative.vsl-threads=1-4 	    3267	    497773 ns/op
+BenchmarkAarch64/fibonacci_iterative.vsl-threads=2-4 	    2150	    728437 ns/op
+BenchmarkAarch64/fibonacci_iterative.vsl-threads=3-4 	    2146	    716903 ns/op
+BenchmarkAarch64/fibonacci_iterative.vsl-threads=4-4 	    2166	    715729 ns/op
+BenchmarkAarch64/fibonacci_recursive.vsl-threads=1-4 	    3811	    433363 ns/op
+BenchmarkAarch64/fibonacci_recursive.vsl-threads=2-4 	    2492	    597647 ns/op
+BenchmarkAarch64/fibonacci_recursive.vsl-threads=3-4 	    2904	    577800 ns/op
+BenchmarkAarch64/fibonacci_recursive.vsl-threads=4-4 	    2784	    579299 ns/op
+BenchmarkAarch64/float.vsl-threads=1-4               	    2913	    596077 ns/op
+BenchmarkAarch64/float.vsl-threads=2-4               	    1802	    843469 ns/op
+BenchmarkAarch64/float.vsl-threads=3-4               	    1982	    828558 ns/op
+BenchmarkAarch64/float.vsl-threads=4-4               	    1845	    827100 ns/op
+BenchmarkAarch64/funcall.vsl-threads=1-4             	    2444	    606824 ns/op
+BenchmarkAarch64/funcall.vsl-threads=2-4             	    2066	    732966 ns/op
+BenchmarkAarch64/funcall.vsl-threads=3-4             	    1916	    770386 ns/op
+BenchmarkAarch64/funcall.vsl-threads=4-4             	    1956	    746879 ns/op
+BenchmarkAarch64/harder.vsl-threads=1-4              	    2632	    618777 ns/op
+BenchmarkAarch64/harder.vsl-threads=2-4              	    1952	    808803 ns/op
+BenchmarkAarch64/harder.vsl-threads=3-4              	    1964	    765772 ns/op
+BenchmarkAarch64/harder.vsl-threads=4-4              	    2038	    778592 ns/op
+BenchmarkAarch64/hello.vsl-threads=1-4               	    9667	    175219 ns/op
+BenchmarkAarch64/hello.vsl-threads=2-4               	    6991	    258313 ns/op
+BenchmarkAarch64/hello.vsl-threads=3-4               	    6546	    253734 ns/op
+BenchmarkAarch64/hello.vsl-threads=4-4               	    6493	    258352 ns/op
+BenchmarkAarch64/if2.vsl-threads=1-4                 	    5002	    383992 ns/op
+BenchmarkAarch64/if2.vsl-threads=2-4                 	    3457	    492043 ns/op
+BenchmarkAarch64/if2.vsl-threads=3-4                 	    3102	    504341 ns/op
+BenchmarkAarch64/if2.vsl-threads=4-4                 	    2924	    466941 ns/op
+BenchmarkAarch64/if_test.vsl-threads=1-4             	    3801	    410177 ns/op
+BenchmarkAarch64/if_test.vsl-threads=2-4             	    2895	    508524 ns/op
+BenchmarkAarch64/if_test.vsl-threads=3-4             	    2840	    493021 ns/op
+BenchmarkAarch64/if_test.vsl-threads=4-4             	    2642	    497595 ns/op
+BenchmarkAarch64/locals.vsl-threads=1-4              	    4497	    391449 ns/op
+BenchmarkAarch64/locals.vsl-threads=2-4              	    3789	    498931 ns/op
+BenchmarkAarch64/locals.vsl-threads=3-4              	    3244	    474881 ns/op
+BenchmarkAarch64/locals.vsl-threads=4-4              	    3157	    496298 ns/op
+BenchmarkAarch64/multi_hello.vsl-threads=1-4         	    1192	   1151677 ns/op
+BenchmarkAarch64/multi_hello.vsl-threads=2-4         	    1158	   1163637 ns/op
+BenchmarkAarch64/multi_hello.vsl-threads=3-4         	    1088	   1287170 ns/op
+BenchmarkAarch64/multi_hello.vsl-threads=4-4         	    1098	   1296994 ns/op
+BenchmarkAarch64/nesting.vsl-threads=1-4             	    3428	    531827 ns/op
+BenchmarkAarch64/nesting.vsl-threads=2-4             	    2066	    707265 ns/op
+BenchmarkAarch64/nesting.vsl-threads=3-4             	    2168	    678219 ns/op
+BenchmarkAarch64/nesting.vsl-threads=4-4             	    2131	    687892 ns/op
+BenchmarkAarch64/newton.vsl-threads=1-4              	    2410	    544404 ns/op
+BenchmarkAarch64/newton.vsl-threads=2-4              	    1987	    741642 ns/op
+BenchmarkAarch64/newton.vsl-threads=3-4              	    2234	    739502 ns/op
+BenchmarkAarch64/newton.vsl-threads=4-4              	    2101	    741710 ns/op
+BenchmarkAarch64/precedence.vsl-threads=1-4          	    5048	    396590 ns/op
+BenchmarkAarch64/precedence.vsl-threads=2-4          	    2887	    473292 ns/op
+BenchmarkAarch64/precedence.vsl-threads=3-4          	    2972	    491876 ns/op
+BenchmarkAarch64/precedence.vsl-threads=4-4          	    3124	    474613 ns/op
+BenchmarkAarch64/prime.vsl-threads=1-4               	    3266	    478386 ns/op
+BenchmarkAarch64/prime.vsl-threads=2-4               	    2324	    669635 ns/op
+BenchmarkAarch64/prime.vsl-threads=3-4               	    2121	    651591 ns/op
+BenchmarkAarch64/prime.vsl-threads=4-4               	    2352	    651099 ns/op
+BenchmarkAarch64/return_nested.vsl-threads=1-4       	    5877	    347280 ns/op
+BenchmarkAarch64/return_nested.vsl-threads=2-4       	    3483	    452920 ns/op
+BenchmarkAarch64/return_nested.vsl-threads=3-4       	    3691	    448993 ns/op
+BenchmarkAarch64/return_nested.vsl-threads=4-4       	    3468	    447584 ns/op
+BenchmarkAarch64/simplefun.vsl-threads=1-4           	    4533	    314155 ns/op
+BenchmarkAarch64/simplefun.vsl-threads=2-4           	    4160	    431122 ns/op
+BenchmarkAarch64/simplefun.vsl-threads=3-4           	    3634	    429879 ns/op
+BenchmarkAarch64/simplefun.vsl-threads=4-4           	    3345	    440102 ns/op
+BenchmarkAarch64/simpleif.vsl-threads=1-4            	    2990	    464692 ns/op
+BenchmarkAarch64/simpleif.vsl-threads=2-4            	    2010	    729466 ns/op
+BenchmarkAarch64/simpleif.vsl-threads=3-4            	    2298	    680568 ns/op
+BenchmarkAarch64/simpleif.vsl-threads=4-4            	    2124	    740567 ns/op
+BenchmarkAarch64/simplenest.vsl-threads=1-4          	    3616	    470667 ns/op
+BenchmarkAarch64/simplenest.vsl-threads=2-4          	    2092	    699297 ns/op
+BenchmarkAarch64/simplenest.vsl-threads=3-4          	    2157	    687041 ns/op
+BenchmarkAarch64/simplenest.vsl-threads=4-4          	    2479	    678281 ns/op
+BenchmarkAarch64/simplify.vsl-threads=1-4            	    2990	    564697 ns/op
+BenchmarkAarch64/simplify.vsl-threads=2-4            	    2235	    686008 ns/op
+BenchmarkAarch64/simplify.vsl-threads=3-4            	    2067	    737909 ns/op
+BenchmarkAarch64/simplify.vsl-threads=4-4            	    2058	    666834 ns/op
+BenchmarkAarch64/trouble.vsl-threads=1-4             	    8096	    178633 ns/op
+BenchmarkAarch64/trouble.vsl-threads=2-4             	    5258	    297286 ns/op
+BenchmarkAarch64/trouble.vsl-threads=3-4             	    4680	    252776 ns/op
+BenchmarkAarch64/trouble.vsl-threads=4-4             	    5938	    307855 ns/op
+BenchmarkAarch64/uminus.vsl-threads=1-4              	    4526	    378192 ns/op
+BenchmarkAarch64/uminus.vsl-threads=2-4              	    3164	    413723 ns/op
+BenchmarkAarch64/uminus.vsl-threads=3-4              	    3446	    415104 ns/op
+BenchmarkAarch64/uminus.vsl-threads=4-4              	    3414	    419612 ns/op
+BenchmarkAarch64/while_test.vsl-threads=1-4          	    3408	    466037 ns/op
+BenchmarkAarch64/while_test.vsl-threads=2-4          	    2301	    525084 ns/op
+BenchmarkAarch64/while_test.vsl-threads=3-4          	    2396	    532530 ns/op
+BenchmarkAarch64/while_test.vsl-threads=4-4          	    2457	    544364 ns/op
+BenchmarkASTOptimisation/aamanyfuncs.vsl-threads=1-4 	     158	   8440253 ns/op
+BenchmarkASTOptimisation/aamanyfuncs.vsl-threads=2-4 	     166	   8915956 ns/op
+BenchmarkASTOptimisation/aamanyfuncs.vsl-threads=3-4 	     172	   9026736 ns/op
+BenchmarkASTOptimisation/aamanyfuncs.vsl-threads=4-4 	     169	   8970941 ns/op
+BenchmarkASTOptimisation/bitops.vsl-threads=1-4      	   10000	    198591 ns/op
+BenchmarkASTOptimisation/bitops.vsl-threads=2-4      	    8936	    192222 ns/op
+BenchmarkASTOptimisation/bitops.vsl-threads=3-4      	    8860	    190547 ns/op
+BenchmarkASTOptimisation/bitops.vsl-threads=4-4      	    8020	    187396 ns/op
+BenchmarkASTOptimisation/cast.vsl-threads=1-4        	   10000	    126753 ns/op
+BenchmarkASTOptimisation/cast.vsl-threads=2-4        	   10000	    146939 ns/op
+BenchmarkASTOptimisation/cast.vsl-threads=3-4        	   10000	    151354 ns/op
+BenchmarkASTOptimisation/cast.vsl-threads=4-4        	   10000	    152505 ns/op
+BenchmarkASTOptimisation/easy.vsl-threads=1-4        	    6874	    185194 ns/op
+BenchmarkASTOptimisation/easy.vsl-threads=2-4        	    7340	    216541 ns/op
+BenchmarkASTOptimisation/easy.vsl-threads=3-4        	    7555	    214857 ns/op
+BenchmarkASTOptimisation/easy.vsl-threads=4-4        	    7447	    211103 ns/op
+BenchmarkASTOptimisation/escapecodes.vsl-threads=1-4 	   16549	     71675 ns/op
+BenchmarkASTOptimisation/escapecodes.vsl-threads=2-4 	   14528	     83033 ns/op
+BenchmarkASTOptimisation/escapecodes.vsl-threads=3-4 	   14366	     83486 ns/op
+BenchmarkASTOptimisation/escapecodes.vsl-threads=4-4 	   14442	     84014 ns/op
+BenchmarkASTOptimisation/euclid.vsl-threads=1-4      	   10000	    161396 ns/op
+BenchmarkASTOptimisation/euclid.vsl-threads=2-4      	    8857	    184375 ns/op
+BenchmarkASTOptimisation/euclid.vsl-threads=3-4      	    9319	    186617 ns/op
+BenchmarkASTOptimisation/euclid.vsl-threads=4-4      	    8166	    186963 ns/op
+BenchmarkASTOptimisation/fibonacci_iterative.vsl-threads=1-4         	   10000	    132150 ns/op
+BenchmarkASTOptimisation/fibonacci_iterative.vsl-threads=2-4         	   10000	    159073 ns/op
+BenchmarkASTOptimisation/fibonacci_iterative.vsl-threads=3-4         	   10000	    155156 ns/op
+BenchmarkASTOptimisation/fibonacci_iterative.vsl-threads=4-4         	   10000	    157509 ns/op
+BenchmarkASTOptimisation/fibonacci_recursive.vsl-threads=1-4         	   10000	    110065 ns/op
+BenchmarkASTOptimisation/fibonacci_recursive.vsl-threads=2-4         	   10000	    116852 ns/op
+BenchmarkASTOptimisation/fibonacci_recursive.vsl-threads=3-4         	   10000	    115163 ns/op
+BenchmarkASTOptimisation/fibonacci_recursive.vsl-threads=4-4         	   10000	    116806 ns/op
+BenchmarkASTOptimisation/float.vsl-threads=1-4                       	   10000	    149193 ns/op
+BenchmarkASTOptimisation/float.vsl-threads=2-4                       	    9631	    172097 ns/op
+BenchmarkASTOptimisation/float.vsl-threads=3-4                       	   10000	    171508 ns/op
+BenchmarkASTOptimisation/float.vsl-threads=4-4                       	   10000	    172118 ns/op
+BenchmarkASTOptimisation/funcall.vsl-threads=1-4                     	   10000	    191989 ns/op
+BenchmarkASTOptimisation/funcall.vsl-threads=2-4                     	    8829	    176508 ns/op
+BenchmarkASTOptimisation/funcall.vsl-threads=3-4                     	    8067	    189130 ns/op
+BenchmarkASTOptimisation/funcall.vsl-threads=4-4                     	    7596	    190644 ns/op
+BenchmarkASTOptimisation/harder.vsl-threads=1-4                      	   10000	    169763 ns/op
+BenchmarkASTOptimisation/harder.vsl-threads=2-4                      	    9214	    188818 ns/op
+BenchmarkASTOptimisation/harder.vsl-threads=3-4                      	    8880	    185847 ns/op
+BenchmarkASTOptimisation/harder.vsl-threads=4-4                      	    8911	    185661 ns/op
+BenchmarkASTOptimisation/hello.vsl-threads=1-4                       	   66530	     23034 ns/op
+BenchmarkASTOptimisation/hello.vsl-threads=2-4                       	   41510	     29501 ns/op
+BenchmarkASTOptimisation/hello.vsl-threads=3-4                       	   42409	     29723 ns/op
+BenchmarkASTOptimisation/hello.vsl-threads=4-4                       	   40634	     30203 ns/op
+BenchmarkASTOptimisation/if2.vsl-threads=1-4                         	   21152	     55846 ns/op
+BenchmarkASTOptimisation/if2.vsl-threads=2-4                         	   17217	     70955 ns/op
+BenchmarkASTOptimisation/if2.vsl-threads=3-4                         	   17018	     70683 ns/op
+BenchmarkASTOptimisation/if2.vsl-threads=4-4                         	   17160	     70984 ns/op
+BenchmarkASTOptimisation/if_test.vsl-threads=1-4                     	   18474	     89853 ns/op
+BenchmarkASTOptimisation/if_test.vsl-threads=2-4                     	   12292	     94557 ns/op
+BenchmarkASTOptimisation/if_test.vsl-threads=3-4                     	   12261	     95168 ns/op
+BenchmarkASTOptimisation/if_test.vsl-threads=4-4                     	   12891	     90917 ns/op
+BenchmarkASTOptimisation/locals.vsl-threads=1-4                      	   10000	    100478 ns/op
+BenchmarkASTOptimisation/locals.vsl-threads=2-4                      	   10000	    100824 ns/op
+BenchmarkASTOptimisation/locals.vsl-threads=3-4                      	   10000	    106166 ns/op
+BenchmarkASTOptimisation/locals.vsl-threads=4-4                      	   10000	    106836 ns/op
+BenchmarkASTOptimisation/multi_hello.vsl-threads=1-4                 	    5402	    286605 ns/op
+BenchmarkASTOptimisation/multi_hello.vsl-threads=2-4                 	    4006	    332742 ns/op
+BenchmarkASTOptimisation/multi_hello.vsl-threads=3-4                 	    3614	    344648 ns/op
+BenchmarkASTOptimisation/multi_hello.vsl-threads=4-4                 	    3985	    344886 ns/op
+BenchmarkASTOptimisation/nesting.vsl-threads=1-4                     	   10000	    146194 ns/op
+BenchmarkASTOptimisation/nesting.vsl-threads=2-4                     	   10000	    175012 ns/op
+BenchmarkASTOptimisation/nesting.vsl-threads=3-4                     	    9430	    175156 ns/op
+BenchmarkASTOptimisation/nesting.vsl-threads=4-4                     	    8053	    171187 ns/op
+BenchmarkASTOptimisation/newton.vsl-threads=1-4                      	   10000	    166868 ns/op
+BenchmarkASTOptimisation/newton.vsl-threads=2-4                      	    9036	    186371 ns/op
+BenchmarkASTOptimisation/newton.vsl-threads=3-4                      	   10000	    182356 ns/op
+BenchmarkASTOptimisation/newton.vsl-threads=4-4                      	    8263	    192853 ns/op
+BenchmarkASTOptimisation/precedence.vsl-threads=1-4                  	   18301	     83889 ns/op
+BenchmarkASTOptimisation/precedence.vsl-threads=2-4                  	   14888	     81263 ns/op
+BenchmarkASTOptimisation/precedence.vsl-threads=3-4                  	   14242	     79868 ns/op
+BenchmarkASTOptimisation/precedence.vsl-threads=4-4                  	   14654	     82019 ns/op
+BenchmarkASTOptimisation/prime.vsl-threads=1-4                       	   10000	    120688 ns/op
+BenchmarkASTOptimisation/prime.vsl-threads=2-4                       	   10000	    142870 ns/op
+BenchmarkASTOptimisation/prime.vsl-threads=3-4                       	   10000	    140924 ns/op
+BenchmarkASTOptimisation/prime.vsl-threads=4-4                       	   10000	    139074 ns/op
+BenchmarkASTOptimisation/return_nested.vsl-threads=1-4               	   15423	     73799 ns/op
+BenchmarkASTOptimisation/return_nested.vsl-threads=2-4               	   13506	     87413 ns/op
+BenchmarkASTOptimisation/return_nested.vsl-threads=3-4               	   13752	     86819 ns/op
+BenchmarkASTOptimisation/return_nested.vsl-threads=4-4               	   13394	     88023 ns/op
+BenchmarkASTOptimisation/simplefun.vsl-threads=1-4                   	   18585	     63432 ns/op
+BenchmarkASTOptimisation/simplefun.vsl-threads=2-4                   	   15621	     76630 ns/op
+BenchmarkASTOptimisation/simplefun.vsl-threads=3-4                   	   15865	     76575 ns/op
+BenchmarkASTOptimisation/simplefun.vsl-threads=4-4                   	   15362	     75852 ns/op
+BenchmarkASTOptimisation/simpleif.vsl-threads=1-4                    	   13489	    117247 ns/op
+BenchmarkASTOptimisation/simpleif.vsl-threads=2-4                    	   10000	    125166 ns/op
+BenchmarkASTOptimisation/simpleif.vsl-threads=3-4                    	    9510	    126431 ns/op
+BenchmarkASTOptimisation/simpleif.vsl-threads=4-4                    	   10000	    124256 ns/op
+BenchmarkASTOptimisation/simplenest.vsl-threads=1-4                  	   10000	    133532 ns/op
+BenchmarkASTOptimisation/simplenest.vsl-threads=2-4                  	   10000	    157391 ns/op
+BenchmarkASTOptimisation/simplenest.vsl-threads=3-4                  	   10000	    157180 ns/op
+BenchmarkASTOptimisation/simplenest.vsl-threads=4-4                  	    9136	    158567 ns/op
+BenchmarkASTOptimisation/simplify.vsl-threads=1-4                    	    8792	    176162 ns/op
+BenchmarkASTOptimisation/simplify.vsl-threads=2-4                    	    8048	    194101 ns/op
+BenchmarkASTOptimisation/simplify.vsl-threads=3-4                    	    8373	    195931 ns/op
+BenchmarkASTOptimisation/simplify.vsl-threads=4-4                    	    8954	    197150 ns/op
+BenchmarkASTOptimisation/trouble.vsl-threads=1-4                     	   51301	     25140 ns/op
+BenchmarkASTOptimisation/trouble.vsl-threads=2-4                     	   33189	     35871 ns/op
+BenchmarkASTOptimisation/trouble.vsl-threads=3-4                     	   33393	     34945 ns/op
+BenchmarkASTOptimisation/trouble.vsl-threads=4-4                     	   34374	     35355 ns/op
+BenchmarkASTOptimisation/uminus.vsl-threads=1-4                      	   16071	     72614 ns/op
+BenchmarkASTOptimisation/uminus.vsl-threads=2-4                      	   13578	     88000 ns/op
+BenchmarkASTOptimisation/uminus.vsl-threads=3-4                      	   13537	     86821 ns/op
+BenchmarkASTOptimisation/uminus.vsl-threads=4-4                      	   13443	     85253 ns/op
+BenchmarkASTOptimisation/while_test.vsl-threads=1-4                  	   12937	     86269 ns/op
+BenchmarkASTOptimisation/while_test.vsl-threads=2-4                  	   10000	    114647 ns/op
+BenchmarkASTOptimisation/while_test.vsl-threads=3-4                  	   10000	    112097 ns/op
+BenchmarkASTOptimisation/while_test.vsl-threads=4-4                  	   10000	    111189 ns/op
+BenchmarkLIRGeneration/aamanyfuncs.vsl-threads=1-4                   	    1396	   1351242 ns/op
+BenchmarkLIRGeneration/aamanyfuncs.vsl-threads=2-4                   	    1748	   1281649 ns/op
+BenchmarkLIRGeneration/aamanyfuncs.vsl-threads=3-4                   	    1491	   1210652 ns/op
+BenchmarkLIRGeneration/aamanyfuncs.vsl-threads=4-4                   	    1630	   1381454 ns/op
+BenchmarkLIRGeneration/bitops.vsl-threads=1-4                        	   50334	     45446 ns/op
+BenchmarkLIRGeneration/bitops.vsl-threads=2-4                        	   16926	     76786 ns/op
+BenchmarkLIRGeneration/bitops.vsl-threads=3-4                        	   20460	     70863 ns/op
+BenchmarkLIRGeneration/bitops.vsl-threads=4-4                        	   20246	     74417 ns/op
+BenchmarkLIRGeneration/cast.vsl-threads=1-4                          	   76788	     28632 ns/op
+BenchmarkLIRGeneration/cast.vsl-threads=2-4                          	   19243	     76033 ns/op
+BenchmarkLIRGeneration/cast.vsl-threads=3-4                          	   19273	     77133 ns/op
+BenchmarkLIRGeneration/cast.vsl-threads=4-4                          	   18676	     78814 ns/op
+BenchmarkLIRGeneration/easy.vsl-threads=1-4                          	   25552	     56239 ns/op
+BenchmarkLIRGeneration/easy.vsl-threads=2-4                          	   10000	    116146 ns/op
+BenchmarkLIRGeneration/easy.vsl-threads=3-4                          	   10000	    118152 ns/op
+BenchmarkLIRGeneration/easy.vsl-threads=4-4                          	   10000	    115700 ns/op
+BenchmarkLIRGeneration/escapecodes.vsl-threads=1-4                   	   99882	     22019 ns/op
+BenchmarkLIRGeneration/escapecodes.vsl-threads=2-4                   	   25950	     53897 ns/op
+BenchmarkLIRGeneration/escapecodes.vsl-threads=3-4                   	   26404	     54803 ns/op
+BenchmarkLIRGeneration/escapecodes.vsl-threads=4-4                   	   26671	     55382 ns/op
+BenchmarkLIRGeneration/euclid.vsl-threads=1-4                        	   45205	     48743 ns/op
+BenchmarkLIRGeneration/euclid.vsl-threads=2-4                        	   12482	    110703 ns/op
+BenchmarkLIRGeneration/euclid.vsl-threads=3-4                        	   12214	    112959 ns/op
+BenchmarkLIRGeneration/euclid.vsl-threads=4-4                        	   12621	    110926 ns/op
+BenchmarkLIRGeneration/fibonacci_iterative.vsl-threads=1-4           	   52899	     41267 ns/op
+BenchmarkLIRGeneration/fibonacci_iterative.vsl-threads=2-4           	   18337	     82838 ns/op
+SIGQUIT: quit
+PC=0x48a361 m=0 sigcode=0
 
-goroutine 5786 [running]:
-vslc/src/backend/arm.genFunction(0xc0005b06c0, 0xc00020df60, 0xd, 0x10)
-	/home/hhr/NTNU/Master/vslc/src/backend/arm/function.go:188 +0x3e26
-vslc/src/backend/arm.GenArm.func1(0xc0005b0360, 0x5, 0x9, 0xc0000ea210, 0xc00046a120)
-	/home/hhr/NTNU/Master/vslc/src/backend/arm/armv8.go:310 +0x193
-created by vslc/src/backend/arm.GenArm
-	/home/hhr/NTNU/Master/vslc/src/backend/arm/armv8.go:304 +0x428
-exit status 2
-FAIL	vslc/src	4.835s
+goroutine 0 [idle]:
+runtime.futex(0x6fcc28, 0x80, 0x0, 0x0, 0x0, 0x0, 0x0, 0xfffffff5, 0x7ffd8140b788, 0x427f3f, ...)
+	/usr/local/go/src/runtime/sys_linux_amd64.s:587 +0x21
+runtime.futexsleep(0x6fcc28, 0x7ffd00000000, 0xffffffffffffffff)
+	/usr/local/go/src/runtime/os_linux.go:45 +0x46
+runtime.notesleep(0x6fcc28)
+	/usr/local/go/src/runtime/lock_futex.go:159 +0x9f
+runtime.stopm()
+	/usr/local/go/src/runtime/proc.go:1910 +0xc5
+runtime.findrunnable(0xc00002a000, 0x0)
+	/usr/local/go/src/runtime/proc.go:2471 +0xa7f
+runtime.schedule()
+	/usr/local/go/src/runtime/proc.go:2669 +0x2d7
+runtime.goexit0(0xc014f63800)
+	/usr/local/go/src/runtime/proc.go:2996 +0x1d6
+runtime.mcall(0x3)
+	/usr/local/go/src/runtime/asm_amd64.s:318 +0x5b
