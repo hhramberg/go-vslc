@@ -51,19 +51,19 @@ func genBranch(v *lir.BranchInstruction, rf regfile.RegisterFile, wr *util.Write
 	switch v.Operator() {
 	case types.Eq:
 		// Jump if op1 != op2.
-		wr.Write("\tB.NE\t%s\n", v.Else().Name())
+		wr.Write("\tb.ne\t%s\n", v.Else().Name())
 	case types.Neq:
 		// Jump if op1 == op2.
-		wr.Write("\tB.EQ\t%s\n", v.Else().Name())
+		wr.Write("\tb.eq\t%s\n", v.Else().Name())
 	case types.LessThan:
 		// Jump if op1 >= op2.
-		wr.Write("\tB.GE\t%s\n", v.Else().Name())
+		wr.Write("\tb.ge\t%s\n", v.Else().Name())
 	case types.LessThanOrEqual:
 		// Jump if op1 > op2.
-		wr.Write("\tB.GT\t%s\n", v.Else().Name())
+		wr.Write("\tb.gt\t%s\n", v.Else().Name())
 	case types.GreaterThan:
 		// Jump if op1 <= op2.
-		wr.Write("\tB.LE\t%s\n", v.Else().Name())
+		wr.Write("\tb.le\t%s\n", v.Else().Name())
 	case types.GreaterThanOrEqual:
 		// Jump if op1 < op2.
 		wr.Write("\tB.LT\t%s\n", v.Else().Name())

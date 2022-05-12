@@ -45,7 +45,7 @@ func Optimise(opt util.Options) error {
 		start := 0
 		end := n
 
-		// Use parallel error listener for listening for errors from worker threads.
+		// Used parallel error listener for listening for errors from worker threads.
 		errs := util.NewPerror(t)
 
 		// Tell main thread that we're launching t threads (go routines).

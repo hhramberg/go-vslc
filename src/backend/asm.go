@@ -34,7 +34,7 @@ func GenerateAssembler(opt util.Options, m *lir.Module, root *ir.Node) error {
 		//return riscv.GenRiscv(opt)
 		return errors.New("RISC-V 64-bit not supported yet")
 	case util.Riscv32:
-		return errors.New("RISC-V 32-bit not supported yet")
+		return errors.New("RISC-V 32-bit not supported")
 	default:
 		return errors.New("unsupported output architecture")
 	}

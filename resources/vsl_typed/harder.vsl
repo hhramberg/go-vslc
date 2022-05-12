@@ -1,3 +1,4 @@
+//
 def start () int
 begin
     var x int

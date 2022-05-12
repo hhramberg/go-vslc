@@ -260,7 +260,7 @@ func genFunctionHeader(n *tree.Node, m *Module) (*Function, error) {
 // genFunctionBody recursively generates the instructions of the Function f starting at ir.Node n.
 func genFunctionBody(n *tree.Node, f *Function) error {
 	st := util.Stack{} // Scope stack.
-	ls := util.Stack{} // Label stack for loops.
+	ls := util.Stack{} // GlobalSeq stack for loops.
 
 	// Create new basic block for function body.
 	bb := f.CreateBlock()
@@ -742,12 +742,13 @@ func genWhile(b *Block, n *tree.Node, st, ls *util.Stack) (*Block, error) {
 	body := b.f.CreateBlock()
 	conv := b.f.CreateBlock()
 
-	// Push head to label stack.
+	// Push head to lseq stack.
 	ls.Push(head)
 
 	// Generate relation and branch to check if to jump to while body or converge.
 	b.CreateBranch(head)
-	rel, err := genRelation(head, n.Children[0], st)
+	b = head
+	rel, err := genRelation(b, n.Children[0], st)
 	if err != nil {
 		return nil, err
 	}
@@ -763,9 +764,9 @@ func genWhile(b *Block, n *tree.Node, st, ls *util.Stack) (*Block, error) {
 		return nil, fmt.Errorf("undefined relation operator %q", n.Children[0].Data.(string))
 	}
 	if rel.DataType() == types.Int {
-		head.CreateConditionalBranch(op, rel, b.CreateConstantInt(0), body, conv)
+		b.CreateConditionalBranch(op, rel, b.CreateConstantInt(0), body, conv)
 	} else {
-		head.CreateConditionalBranch(op, rel, b.CreateConstantFloat(0.0), body, conv)
+		b.CreateConditionalBranch(op, rel, b.CreateConstantFloat(0.0), body, conv)
 	}
 
 	// Create while body.

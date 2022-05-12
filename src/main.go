@@ -5,8 +5,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"sync"
-	"time"
 	"vslc/src/backend"
 	lir2 "vslc/src/backend/lir"
 	"vslc/src/ir/lir"
@@ -90,8 +88,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	wg := sync.WaitGroup{}
-
 	// Initiate output writer.
 	if opt.LLVM && opt.TokenStream {
 		fmt.Println("Error: cannot run token stream and LLVM generation at the same time.")
@@ -108,25 +104,26 @@ func main() {
 						fmt.Println(err)
 					}
 				}(f)
-				util.ListenWrite(opt, f, &wg)
+				util.ListenWrite(opt, f)
 			} else {
 				fmt.Println(err)
 				os.Exit(1)
 			}
 		} else {
 			// Write results to stdout.
-			util.ListenWrite(opt, nil, &wg)
+			util.ListenWrite(opt, nil)
 		}
-		defer util.Close()
 	}
 	ret := 0
 	if err := run(opt); err != nil {
-		fmt.Printf("Error: %s", err)
+		fmt.Printf("Error: %s\n", err)
 		ret = 1
 	}
 
+	if !opt.LLVM {
+		util.Close()
+	}
+
 	// Wait for code generation to complete.
-	wg.Wait() // TODO: Make this such that it works.
-	time.Sleep(250*time.Millisecond) // TODO: Delete.
 	os.Exit(ret)
 }

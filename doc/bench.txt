@@ -1,0 +1,16 @@
+goos: linux
+goarch: amd64
+pkg: vslc/src
+BenchmarkAarch64/aamanyfuncs.vsl-threads=1-4         	      66	  16415361 ns/op
+BenchmarkAarch64/aamanyfuncs.vsl-threads=2-4         	      93	  12767695 ns/op
+BenchmarkAarch64/aamanyfuncs.vsl-threads=3-4         	panic: interface conversion: interface {} is , not float64
+
+goroutine 5786 [running]:
+vslc/src/backend/arm.genFunction(0xc0005b06c0, 0xc00020df60, 0xd, 0x10)
+	/home/hhr/NTNU/Master/vslc/src/backend/arm/function.go:188 +0x3e26
+vslc/src/backend/arm.GenArm.func1(0xc0005b0360, 0x5, 0x9, 0xc0000ea210, 0xc00046a120)
+	/home/hhr/NTNU/Master/vslc/src/backend/arm/armv8.go:310 +0x193
+created by vslc/src/backend/arm.GenArm
+	/home/hhr/NTNU/Master/vslc/src/backend/arm/armv8.go:304 +0x428
+exit status 2
+FAIL	vslc/src	4.835s

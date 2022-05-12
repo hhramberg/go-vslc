@@ -333,7 +333,7 @@ func GenLLVM(opt util.Options, root *ast.Node) error {
 //	fun	-	Current LLVM function being generated.
 //	n	-	Current node in syntax tree being generated.
 //	st	-	Scope stack for looking up correct variables with respect to definition scopes.
-//	ls	-	Label stack for continuing/breaking correct loops.
+//	ls	-	GlobalSeq stack for continuing/breaking correct loops.
 //
 // Returns:
 //
@@ -436,7 +436,7 @@ func genFuncHeader(m llvm.Module, n *ast.Node) (llvm.Value, error) {
 	}
 	ftyp := llvm.FunctionType(ret, atyp, false) // TODO: Sigseg during parallel.
 
-	// Use mutex for parallel thread safety.
+	// Used mutex for parallel thread safety.
 	globals.Lock()
 	defer globals.Unlock()
 
@@ -465,7 +465,7 @@ func genFuncHeader(m llvm.Module, n *ast.Node) (llvm.Value, error) {
 // instructions that's run when the function is called.
 func genFuncBody(b llvm.Builder, m llvm.Module, fun llvm.Value, n *ast.Node) error {
 	st := util.Stack{} // Scope stack.
-	ls := util.Stack{} // Label stack for loops.
+	ls := util.Stack{} // GlobalSeq stack for loops.
 
 	// Create new basic block for function body.
 	bb := llvm.AddBasicBlock(fun, "")
@@ -1289,7 +1289,7 @@ func genTargetTriple(opt *util.Options) (llvm.Target, string, error) {
 
 	// Target architecture. Revert to host system default if unknown.
 	if opt.TargetArch == util.UnknownArch {
-		// Use compiler host's default triple.
+		// Used compiler host's default triple.
 		triple = llvm.DefaultTargetTriple()
 	} else {
 		// Try generating target triple from CLI arguments.

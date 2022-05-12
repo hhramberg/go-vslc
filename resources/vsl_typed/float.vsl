@@ -1,3 +1,4 @@
+// 3.14 3.83
 // This sample program tests all four floating point arithmetic operators.
 
 def float_test(a, b float) int

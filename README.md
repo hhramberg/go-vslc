@@ -14,6 +14,10 @@ code generation of the Go programming language.
 **If you are looking for how to use the compiler please see
 [USAGE.md](doc/USAGE.md).**
 
+**[scrips.md](doc/scripts.md) contain descriptions of the bundled test and benchmarking scripts.**
+
+**View benchmarking results in [bench.md](doc/bench.md).**
+
 ## Very Simple Language
 
 Very Simple Language, (VSL), was defined by [Jeremy Bennett](http://www.jeremybennett.com/publications/index.html)

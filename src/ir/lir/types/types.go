@@ -57,6 +57,7 @@ const (
 	Param
 	PrintInstruction
 	CastInstruction
+	PreserveInstruction
 )
 
 const (
@@ -102,6 +103,7 @@ var iTyp = [...]string{
 	"Local",
 	"PrintInstruction",
 	"CastInstruction",
+	"PreserveInstruction",
 }
 
 // dTyp provides string literals for DataType constants.

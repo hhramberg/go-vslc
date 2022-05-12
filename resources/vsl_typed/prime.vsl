@@ -1,9 +1,11 @@
+//
 // VSL version of prime assembly exercise, courtesy
 // of J.H.Ø. Anthony (class of 2011)
 
 def mainfunc () int
 begin
-    return factor (1836311903)
+    return 0
+    // return factor (1836311903)
 end
 
 def factor (n int) int

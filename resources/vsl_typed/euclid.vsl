@@ -1,3 +1,4 @@
+// 45 -2
 def euclid ( a, b int) int
 begin
     if a < 0 then a := -a

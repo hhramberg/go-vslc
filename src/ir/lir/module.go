@@ -18,7 +18,7 @@ type Module struct {
 	globals    []*Global            // globals defines the globally declared variables of the program.
 	fmap       map[string]*Function // A hash map for quickly accessing globally declared functions.
 	gmap       map[string]*Global   // A hash map for quickly accessing globally declared variables.
-	constants  []Value              // All constants are linked globally in case they need to be loaded from global data instead of immediate values.
+	constants  []*Constant          // All constants are linked globally in case they need to be loaded from global data instead of immediate values.
 	strings    []*String            // strings declares the string data used in the program.
 	seq        int                  // seq is the global sequence number that generates unique identifiers for global LIR objects.
 	sync.Mutex                      // Mutex synchronizes worker go routine access to global data.
@@ -62,7 +62,7 @@ func CreateModule(name string) *Module {
 		functions: make([]*Function, 0, gSize),
 		fmap:      make(map[string]*Function),
 		gmap:      make(map[string]*Global),
-		constants: make([]Value, 0, gSize),
+		constants: make([]*Constant, 0, gSize),
 		strings:   make([]*String, 0, gSize),
 		Mutex:     sync.Mutex{},
 		seq:       1 << 20, // Offset by a large number, because function's local sequence numbers start at 0.
@@ -178,6 +178,18 @@ func (m *Module) CreateGlobalFloat(name string) *Global {
 	return inst
 }
 
+// createConstant appends a float or int constant to the Module m.
+func (m *Module) createConstant(v Value) {
+	if v.Type() != types.Constant && v.DataType() != types.Int && v.DataType() != types.Float {
+		panic(fmt.Sprintf("cannot create constant: expected %s %s or %s %s, got %s %s",
+			types.Constant.String(), types.Int.String(), types.Constant.String(),
+			types.Float, v.Type().String(), v.DataType()))
+	}
+	m.Lock()
+	defer m.Unlock()
+	m.constants = append(m.constants, v.(*Constant))
+}
+
 // CreateGlobalString creates a global constant string.
 func (m *Module) CreateGlobalString(s string) *String {
 	if len(s) < 1 {
@@ -212,6 +224,11 @@ func (m *Module) Globals() []*Global {
 // Strings returns a slice of all the constant string literals of Module m.
 func (m *Module) Strings() []*String {
 	return m.strings
+}
+
+// Constants returns a slice of all the declared constants defined for Module m.
+func (m *Module) Constants() []*Constant {
+	return m.constants
 }
 
 // CreateFunction creates a function header. The function body is defined when at least one basic block is added.

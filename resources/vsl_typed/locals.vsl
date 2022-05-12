@@ -1,4 +1,4 @@
-
+// 1 2 3
 // This program tests the evaluation of local scopes
 
 var i,j,k int

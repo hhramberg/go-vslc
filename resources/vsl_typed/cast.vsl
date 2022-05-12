@@ -1,3 +1,4 @@
+// 12 54 2.34 3.14
 // This program tests casting int to float and vice versa.
 
 def casting(a, b int, c, d float) int
@@ -7,7 +8,9 @@ begin
     e := a + c
     f := b + d
     e := 3
+    print "a is", a, "b is", b, "c is", c, "d is", d
     f := foo(e, 0.3)
+    print "f is", f
     return 0
 end
 

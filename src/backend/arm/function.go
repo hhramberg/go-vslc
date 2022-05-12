@@ -30,7 +30,7 @@ import (
 //
 // - Grow stack with 8 * arguments + sp and lr. Align with stack alignment.
 // - Store all arguments on stack to maximise available registers.
-// - Use register file LRU to assign registers.
+// - Used register file LRU to assign registers.
 // - Generate function body.
 // - De-allocate stack.
 // - Return x0 for integer functions, use v0 for floating point functions.
@@ -81,11 +81,11 @@ func genFunction(fun *lir.Function, wr *util.Writer) error {
 			// Float parameter.
 			if fi > paramReg {
 				// Load from stack, store on stack. Reuse v0, because argument passed in v0 is stored on stack by this point.
-				wr.Write("\tldr\t%s, [%s, #%d]\n", regi[v0], rf.FP(), wordSize*i1)
-				wr.Write("\tstr\t%s, [%s, #%d]\n", regi[v0], rf.FP(), offset)
+				wr.Write("\tldr\t%s, [%s, #%d]\n", rf.GetF(v0), rf.FP(), wordSize*i1)
+				wr.Write("\tstr\t%s, [%s, #%d]\n", rf.GetF(v0), rf.FP(), offset)
 			} else {
 				// Store directly on stack from register.
-				wr.Write("\tstr\t%s, [%s, #%d]\n", regi[v0+fi], rf.FP(), offset)
+				wr.Write("\tstr\t%s, [%s, #%d]\n", rf.GetF(v0+fi), rf.FP(), offset)
 			}
 			fi++
 		}
@@ -102,7 +102,7 @@ func genFunction(fun *lir.Function, wr *util.Writer) error {
 			switch e2.Type() {
 			case types.DataInstruction:
 				if e2.DataType() == types.VaList {
-					// TODO: handle valist exclusively.
+					// VaList is handled already by genExpression.
 					break
 				}
 				if err := genExpression(e2.(*lir.DataInstruction), wr); err != nil {
@@ -116,7 +116,7 @@ func genFunction(fun *lir.Function, wr *util.Writer) error {
 					wr.Write("\tadd\t%s, %s, :lo12:%s\n", dst.String(), dst.String(), e2.Operand1().Name())
 					break
 				}
-				switch e2.Operand1().Type(){
+				switch e2.Operand1().Type() {
 				case types.DeclareInstruction:
 					// Add 3 to offset: 1 to align for bottom-down, 2 for skipping stack saved SP and LR.
 					src := e2.Operand1().(*lir.DeclareInstruction)
@@ -132,7 +132,7 @@ func genFunction(fun *lir.Function, wr *util.Writer) error {
 				case types.Global:
 					src := e2.Operand1().(*lir.Global)
 
-					// Use x0 for storing the temporary value that is &GLOBAL_VARIABLE. Load cannot happen after return.
+					// Used x0 for storing the temporary value that is &GLOBAL_VARIABLE. Load cannot happen after return.
 					wr.Write("\tadrp\t%s, %s\n", rf.GetI(r0).String(), src.Name())
 					wr.Write("\t%s\t%s, [%s, :lo12:%s]\n",
 						load, dst.String(), rf.GetI(r0).String(), src.Name())
@@ -157,10 +157,10 @@ func genFunction(fun *lir.Function, wr *util.Writer) error {
 				case types.Global:
 					dst := e2.Operand2().(*lir.Global)
 
-					// Use x0 for storing the temporary value that is &GLOBAL_VARIABLE. Load cannot happen after return.
-					wr.Write("\tadrp\t%s, %s\n", rf.GetI(r0), dst.Name())
+					// Used x28 for storing the temporary value that is &GLOBAL_VARIABLE. Load cannot happen after return.
+					wr.Write("\tadrp\t%s, %s\n", rf.GetI(r28).String(), dst.Name())
 					wr.Write("\t%s\t%s, [%s, :lo12:%s]\n",
-						store, src.String(), src.String(), dst.Name())
+						store, src.String(), rf.GetI(r28).String(), dst.Name())
 				default:
 					panic(fmt.Sprintf("compiler error: unexpected store destination type %d", e2.Operand2().Type()))
 				}
@@ -169,28 +169,32 @@ func genFunction(fun *lir.Function, wr *util.Writer) error {
 				if e2.DataType() == types.Int {
 					val := e2.(*lir.Constant).Value().(int)
 					if minImm <= val && val <= maxImm {
-						// Use immediate instruction.
+						// Used immediate instruction.
 						wr.Write("\tmov\t%s, #%d\n", r.String(), val)
 					} else {
-						// Create hex string of integer and load.
-						istr := fun.CreateGlobalString(fmt.Sprintf("%x", val))
-						wr.Write("\tadrp\t%s, =%s\n", r.String(), istr.Name())
-						wr.Write("\tldr\t%s, [%s, :lo12:%s]\n", r.String(), r.String(), istr.Name())
+						// Load hex string representation of integer and load. Use x28 as temporary register.
+						cnst := e2.(*lir.Constant)
+						istr := fmt.Sprintf("%s%d", labelConstant, cnst.GlobalSeq())
+						wr.Write("\tadrp\t%s, %s\t\t//Load constant %d\n",
+							rf.GetI(r28).String(), istr, cnst.Value().(int))
+						wr.Write("\tldr\t%s, [%s, :lo12:%s]\n", r.String(), rf.GetI(r28).String(), istr)
+						cnst.Use()
 					}
 				} else {
-					val := e2.(*lir.Constant).Value().(float64)
-
-					// Append hex string of float to global string table.
-					fstr := fun.CreateGlobalString(fmt.Sprintf("%x", val))
-					wr.Write("\tadrp\t%s, =%s\n", r.String(), fstr.Name())
-					wr.Write("\tldr\t%s, [%s, :lo12:%s]\n", r.String(), r.String(), fstr.Name())
+					// Load hex string representation of float into destination register. Use x28 as temporary register.
+					cnst := e2.(*lir.Constant)
+					fstr := fmt.Sprintf("%s%d", labelConstant, cnst.GlobalSeq())
+					wr.Write("\tadrp\t%s, %s\t\t//Load constant %f\n",
+						rf.GetI(r28).String(), fstr, cnst.Value().(float64))
+					wr.Write("\tldr\t%s, [%s, :lo12:%s]\n", r.String(), rf.GetI(r28).String(), fstr)
+					cnst.Use()
 				}
 			case types.CastInstruction:
 				if e2.DataType() == types.Int {
 					// Cast float to int.
-					wr.Write("\tfcvts\t%s, %s\n",
+					wr.Write("\tfcvtns\t%s, %s\n",
 						e2.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String(),
-						e2.Operand1().GetHW().(*lir.LiveNode).Reg.(regfile.Register).String())
+						e2.Operand1().GetHW().(*lir.LiveNode).Reg.(regfile.Register).String()) // Convert to nearest.
 				} else {
 					// Cast int to float.
 					wr.Write("\tscvtf\t%s, %s\n",
@@ -208,6 +212,15 @@ func genFunction(fun *lir.Function, wr *util.Writer) error {
 			case types.FunctionCallInstruction:
 				if err := genFunctionCall(e2.(*lir.FunctionCallInstruction), rf, wr); err != nil {
 					return err
+				}
+			case types.PreserveInstruction:
+				// Preserves x0 or d0 from function calls.
+				dst := e2.GetHW().(*lir.LiveNode).Reg.(regfile.Register)
+				src := e2.Operand1().GetHW().(*lir.LiveNode).Reg.(regfile.Register)
+				if e2.DataType() == types.Int {
+					wr.Write("\tmov\t%s, %s\n", dst.String(), src.String())
+				}else{
+					wr.Write("\tfmov\t%s, %s\n", dst.String(), src.String())
 				}
 			case types.PrintInstruction, types.Global, types.Param, types.DeclareInstruction:
 				// Ignore, because they've been handled during LIR construction.
@@ -229,7 +242,7 @@ func genReturn(v *lir.ReturnInstruction, fun *lir.Function, rf *RegisterFile, wr
 		if r.Type() == int(i) {
 			wr.Write("\tmov\t%s, %s\n", rf.regi[r0].String(), r.String())
 		} else {
-			wr.Write("\tmov\t%s, %s\n", rf.regf[v0].String(), r.String())
+			wr.Write("\tfmov\t%s, %s\n", rf.regf[v0].String(), r.String())
 		}
 	}
 
@@ -240,7 +253,7 @@ func genReturn(v *lir.ReturnInstruction, fun *lir.Function, rf *RegisterFile, wr
 			wr.Write("\tscvtf\t%s, %s\n", rf.GetF(v0).String(), r.String())
 		} else {
 			// Cast float to integer.
-			wr.Write("\tfcvts\t%s, %s\n", rf.GetI(r0).String(), r.String())
+			wr.Write("\tfcvtns\t%s, %s\n", rf.GetI(r0).String(), r.String()) // Convert to nearest.
 		}
 	}
 

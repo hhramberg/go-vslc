@@ -1,3 +1,4 @@
+//
 def escapecodes () int
 begin
     var a,b int

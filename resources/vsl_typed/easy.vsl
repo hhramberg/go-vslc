@@ -1,3 +1,4 @@
+// 123
 def mainfunc ( a int ) int
 begin
     var x, y, z int

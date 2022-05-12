@@ -84,7 +84,7 @@ func ParseArgs() (Options, error) {
 			printHelp()
 			os.Exit(0)
 		case "-ll":
-			// Use LLVM IR and LLVM code generator.
+			// Used LLVM IR and LLVM code generator.
 			opt.LLVM = true
 		case "-o", "-t":
 			if i1+1 >= len(args) {

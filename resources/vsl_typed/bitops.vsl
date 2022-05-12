@@ -1,4 +1,4 @@
-
+// 2 4
 // This program tests the evaluation of the unary minus
 
 def bitwise_operators ( a, b int) int

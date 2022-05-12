@@ -16,8 +16,10 @@ type Constant struct {
 	name string         // name defines the optional name of the local variable.
 	typ  types.DataType // typ defines the variable's data type.
 	val  interface{}    // val holds the constant's data value.
+	lseq int            // lseq holds the global data segment label sequence number of the Constant.
+	used int            // used gets incremented every time the constant is loaded from the data segment.
 	hw   interface{}    // Hardware register of the DataInstruction's virtual register.
-	en bool             // Set to true if instruction is enabled.
+	en   bool           // Set to true if instruction is enabled.
 }
 
 // ---------------------
@@ -98,4 +100,19 @@ func (inst *Constant) IsEnabled() bool {
 // Value returns either the int or float value of Constant inst.
 func (inst *Constant) Value() interface{} {
 	return inst.val
+}
+
+// GlobalSeq returns the globally assigned data sequence number of the constant.
+func (inst *Constant) GlobalSeq() int {
+	return inst.lseq
+}
+
+// Use increments the use counter of the Constant.
+func (inst *Constant) Use() {
+	inst.used++
+}
+
+// Used returns true if the Constant has been loaded.
+func (inst *Constant) Used() bool {
+	return inst.used > 0
 }

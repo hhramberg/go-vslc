@@ -1,3 +1,4 @@
+// 14
 def test( a int ) int
 begin
     print a

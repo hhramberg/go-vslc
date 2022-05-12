@@ -1,4 +1,4 @@
-
+//
 // This program tests activation records, deftion call and return
 
 def defall () int

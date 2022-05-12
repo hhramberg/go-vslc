@@ -1,5 +1,6 @@
+// 123
 def hello (wang int) int
 begin
     print "wang"
-    return 1
+    return 0
 end

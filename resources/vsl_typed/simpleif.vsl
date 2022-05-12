@@ -1,3 +1,4 @@
+// 1 2 3 4 5 6 7
 def dingdong ( a, b, c, d, e, f, g int) int
 begin
     var x int

@@ -23,13 +23,21 @@ type Writer struct {
 	c  chan string
 }
 
+// syncer is a sync.Mutex synchronised structure that keeps track of two counters. One counter counts the number of
+// worker go routines that have registered a Writer. The other counter keeps track of the number of write operations.
+type syncer struct {
+	active  int // active keeps track of the number of active go worker threads.
+	writing int // writing keeps track of the number of write operations.
+	sync.Mutex
+}
+
 // ---------------------
 // ----- Constants -----
 // ---------------------
 
-var wc chan string     // Write channel used for receiving data from worker threads.
-var cc chan error      // Close channel used by main thread to signal to end write operations.
-var wg *sync.WaitGroup // used for synchronising when I/O finished writing to output.
+var wc chan string // wc is the writer channel used for receiving data from worker go routines.
+var cc chan error  // cc is the close channel used by main thread to signal to end write operations.
+var sc syncer
 
 // ---------------------
 // ----- functions -----
@@ -45,55 +53,37 @@ func (w *Writer) WriteString(s string) {
 	w.sb.WriteString(s)
 }
 
-// Ins1 writes a one-line instruction using the operator and single operand.
-func (w *Writer) Ins1(op, rs1 string) {
-	w.sb.WriteString(fmt.Sprintf("\t%s\t%s\n", op, rs1))
-}
-
-// Ins2 writes a one-line instruction using the operator, destination register and single source register.
-func (w *Writer) Ins2(op, rd, rs1 string) {
-	w.sb.WriteString(fmt.Sprintf("\t%s\t%s, %s\n", op, rd, rs1))
-}
-
-// Ins2imm writes a one-line instruction using the operator, destination register, single source register and
-// signed immediate.
-func (w *Writer) Ins2imm(op, rd, rs1 string, imm int) {
-	w.sb.WriteString(fmt.Sprintf("\t%s\t%s, %s, %d\n", op, rd, rs1, imm))
-}
-
-// Ins3 writes a one-line instruction using the operator, destination register and two source registers.
-func (w *Writer) Ins3(op, rd, rs1, rs2 string) {
-	w.sb.WriteString(fmt.Sprintf("\t%s\t%s, %s, %s\n", op, rd, rs1, rs2))
-}
-
-// LoadStore writes a load or store instruction of register reg with offset to the register pointer (usually sp or fp).
-func (w *Writer) LoadStore(op, reg string, offset int, pointer string) {
-	w.sb.WriteString(fmt.Sprintf("\t%s\t%s, %d(%s)\n", op, reg, offset, pointer))
-}
-
 // Label writes a one-line label with the given name.
 func (w *Writer) Label(name string) {
 	w.sb.WriteString(fmt.Sprintf("%s:\n", name))
 }
 
+// Len returns the result of calling the Len function on the underlying strings.Builder.
+func (w *Writer) Len() int {
+	return w.sb.Len()
+}
+
 // Flush empties the Writer's buffer and sends the buffer data to the
 // designated output writer over the Writer's channel.
 func (w *Writer) Flush() {
+	if w.sb.Len() < 1 {
+	}
+	sc.addWriteOperation()
 	w.c <- w.sb.String()
-	w.sb = strings.Builder{}
+	w.sb.Reset()
 }
 
 // Close flushes the Writer's buffer and then closes the Writer's channel.
 func (w *Writer) Close() {
 	w.Flush()
 	w.c = nil
-	wg.Done()
+	sc.subWriter()
 }
 
 // NewWriter returns a new Writer to be used by worker threads to write strings concurrently to the output buffer.
 // Must not be called before main thread has called ListenWrite.
 func NewWriter() Writer {
-	wg.Add(1)
+	sc.addWriter()
 	return Writer{
 		sb: strings.Builder{},
 		c:  wc,
@@ -140,15 +130,14 @@ func ReadSource(opt Options) (string, error) {
 // ListenWrite listens for worker thread outputs. The received data is written to either file
 // if File pointer f is not nil or stdout if File pointer f is nil. The function loops until
 // a termination signal is sent using the Close function.
-func ListenWrite(opt Options, f *os.File, wgg *sync.WaitGroup) {
-	wg = wgg
+func ListenWrite(opt Options, f *os.File) {
 	if opt.Threads > 1 && !opt.LLVM && !opt.TokenStream {
-		// LLVM IR can't be output in parallel, because enumeration happens when called on module.
+		// LLVM IR can't be output in parallel.
 		wc = make(chan string, opt.Threads+1)
 	} else {
 		wc = make(chan string, 1)
 	}
-	cc = make(chan error, 1) // Make buffered to catch Close before listener is invoked.
+	cc = make(chan error)
 	var w *bufio.Writer
 	if f != nil {
 		// Write output to file.
@@ -162,17 +151,33 @@ func ListenWrite(opt Options, f *os.File, wgg *sync.WaitGroup) {
 	go func(wc chan string, cc chan error) {
 		defer close(wc)
 		defer close(cc)
+		stop := false
 		for {
+			if stop {
+				// Got stop signal. Check for pending jobs.
+				sc.Lock()
+				if sc.writing == 0 && sc.active == 0 {
+					// No more jobs, no active writers: close the listener and tell
+					// the main thread over the close channel.
+					sc.Unlock()
+					cc <- nil
+					return // Stop the listener writer go routine.
+				}
+				sc.Unlock()
+			}
 			select {
 			case s := <-wc:
 				if _, err := w.WriteString(s); err != nil {
-					fmt.Println(err) // TODO: Handle better.
+					fmt.Println(err)
+					os.Exit(1)
 				}
 				if err := w.Flush(); err != nil {
-					fmt.Println(err) // TODO: Handle better.
+					fmt.Println(err)
+					os.Exit(1)
 				}
+				sc.subWriteOperation()
 			case <-cc:
-				return
+				stop = true
 			}
 		}
 	}(wc, cc)
@@ -180,5 +185,34 @@ func ListenWrite(opt Options, f *os.File, wgg *sync.WaitGroup) {
 
 // Close sends the termination signal to the writer listener.
 func Close() {
-	cc <- nil
+	cc <- nil // Send close signal to writer listener.
+	<-cc      // Wait for clear signal from writer listener go routine.
+}
+
+// addWriter increments the registered writers on the syncer.
+func (sc *syncer) addWriter() {
+	sc.Lock()
+	sc.active++
+	sc.Unlock()
+}
+
+// subWriter decrements the registered writers on the syncer.
+func (sc *syncer) subWriter() {
+	sc.Lock()
+	sc.active--
+	sc.Unlock()
+}
+
+// addWriteOperation increments the number of write operations on the syncer.
+func (sc *syncer) addWriteOperation() {
+	sc.Lock()
+	sc.writing++
+	sc.Unlock()
+}
+
+// subWriteOperation decrements the number of write operations on the syncer.
+func (sc *syncer) subWriteOperation() {
+	sc.Lock()
+	sc.writing--
+	sc.Unlock()
 }

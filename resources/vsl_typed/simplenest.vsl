@@ -1,3 +1,4 @@
+//
 def hello () int
 begin
     var t int

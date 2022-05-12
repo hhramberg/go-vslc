@@ -1,3 +1,4 @@
+//
 def defall () int
 begin
     var x int

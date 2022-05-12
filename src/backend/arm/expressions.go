@@ -103,11 +103,10 @@ func genExpression(v *lir.DataInstruction, wr *util.Writer) error {
 // genFunctionCall generates aarch64 assembler for a function call. An error is returned if something went wrong. The
 // result of the function call is put in register a0 for integers or v0 for floating point functions.
 func genFunctionCall(v *lir.FunctionCallInstruction, rf regfile.RegisterFile, wr *util.Writer) error {
-
 	// Check if we need to pass arguments on stack.
-	nargs := 0
-	ni := 0 // Number of integer arguments.
-	nf := 0 // Number of float arguments.
+	nargs := 0 // Total number of arguments.
+	ni := 0    // Number of integer arguments.
+	nf := 0    // Number of float arguments.
 
 	for _, e1 := range v.Arguments() {
 		if e1.DataType() == types.VaList {
@@ -155,25 +154,25 @@ func genFunctionCall(v *lir.FunctionCallInstruction, rf regfile.RegisterFile, wr
 
 			if param.DataType() == types.Int || param.DataType() == types.String {
 				if ii < paramReg {
-					// Use integer registers.
+					// Used integer registers.
 					wr.Write("\tmov\t%s, %s\n",
 						rf.GetI(ii), arg.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String())
 				} else {
 					// Put on stack.
 					wr.Write("\tstr\t%s, [%s, #%d]\n",
-						arg.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String(), rf.SP().String(), nargs-1)
+						arg.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String(), rf.SP().String(), wordSize*(nargs-1))
 				}
 				ii++
 				nargs--
 			} else if arg.DataType() == types.Float {
 				if fi < paramReg {
-					// Use float registers.
-					wr.Write("\tmov\t%s, %s\n",
+					// Used float registers.
+					wr.Write("\tfmov\t%s, %s\n",
 						rf.GetF(fi), arg.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String())
 				} else {
 					// Put on stack.
 					wr.Write("\tstr\t%s, [%s, #%d]\n",
-						arg.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String(), rf.SP().String(), nargs-1)
+						arg.GetHW().(*lir.LiveNode).Reg.(regfile.Register).String(), rf.SP().String(), wordSize*(nargs-1))
 				}
 				fi++
 				nargs--
@@ -188,7 +187,7 @@ func genFunctionCall(v *lir.FunctionCallInstruction, rf regfile.RegisterFile, wr
 							wr.Write("\tmov\t%s, %s\n", rf.GetI(ii).String(), varg.String())
 						} else {
 							// Pass on stack.
-							wr.Write("\tstr\t%s, [%s, #%d]\n", varg.String(), rf.SP().String(), nargs-1)
+							wr.Write("\tstr\t%s, [%s, #%d]\n", varg.String(), rf.SP().String(), wordSize*(nargs-1))
 						}
 						ii++
 						nargs--
@@ -196,10 +195,10 @@ func genFunctionCall(v *lir.FunctionCallInstruction, rf regfile.RegisterFile, wr
 						// Float.
 						if fi < paramReg {
 							// Move to register.
-							wr.Write("\tmov\t%s, %s\n", rf.GetF(fi).String(), varg.String())
+							wr.Write("\tfmov\t%s, %s\n", rf.GetF(fi).String(), varg.String())
 						} else {
 							// Pass on stack.
-							wr.Write("\tstr\t%s, [%s, #%d]\n", varg.String(), rf.SP().String(), nargs-1)
+							wr.Write("\tstr\t%s, [%s, #%d]\n", varg.String(), rf.SP().String(), wordSize*(nargs-1))
 						}
 						fi++
 						nargs--

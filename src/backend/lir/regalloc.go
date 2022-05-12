@@ -173,8 +173,8 @@ func allocateRegisterFunc(opt util.Options, f *lir.Function, rf regfile.Register
 	for n := stack.Pop(); n != nil; n = stack.Pop() {
 		n.(*lir.LiveNode).Enabled = true
 
-		// Exclusively assign d0 or x0 to return statement.
-		if n.(*lir.LiveNode).Val.Type() == types.ReturnInstruction {
+		// Exclusively assign d0 or x0 to return statement and function calls.
+		if n.(*lir.LiveNode).Val.Type() == types.ReturnInstruction || n.(*lir.LiveNode).Val.Type() == types.FunctionCallInstruction{
 			typ := n.(*lir.LiveNode).Val.DataType()
 			if typ == types.Int || typ == types.String {
 				// Strings are addresses stored in register.
@@ -188,8 +188,8 @@ func allocateRegisterFunc(opt util.Options, f *lir.Function, rf regfile.Register
 		// Check for datatype of Value. No need to assign physical register to branch instructions etc.
 		if n.(*lir.LiveNode).Val.Type() != types.DataInstruction &&
 			n.(*lir.LiveNode).Val.Type() != types.LoadInstruction &&
-			n.(*lir.LiveNode).Val.Type() != types.FunctionCallInstruction &&
 			n.(*lir.LiveNode).Val.Type() != types.Constant &&
+			n.(*lir.LiveNode).Val.Type() != types.PreserveInstruction &&
 			n.(*lir.LiveNode).Val.Type() != types.CastInstruction {
 			continue
 		}

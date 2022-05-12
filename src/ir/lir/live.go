@@ -194,7 +194,7 @@ func calcLivenessFunction(f *Function) []*LiveNode {
 			// Variable declared. Remove from live slice.
 			for i2, e2 := range live {
 				if def.Val.Id() == e2.Val.Id() {
-					// Delete from live. Order is unimportant. Use fast method.
+					// Delete from live. Order is unimportant. Used fast method.
 					// https://stackoverflow.com/questions/37334119/how-to-delete-an-element-from-a-slice-in-golang
 					live[i2] = live[len(live)-1]
 					live = live[:len(live)-1]
@@ -257,7 +257,8 @@ func def(n *LiveNode) *LiveNode {
 		v.Type() == types.LoadInstruction ||
 		v.Type() == types.FunctionCallInstruction ||
 		v.Type() == types.Constant ||
-		v.Type() == types.CastInstruction {
+		v.Type() == types.CastInstruction ||
+		v.Type() == types.PreserveInstruction {
 		return v.GetHW().(*LiveNode)
 	}
 	return nil
