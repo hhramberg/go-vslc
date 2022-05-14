@@ -90,7 +90,7 @@ func BenchmarkAarch64(b *testing.B) {
 			}
 			b.Run(fmt.Sprintf("%s-threads=%d", e1.name, i2), func(b *testing.B) {
 				for n := 0; n < b.N; n++ {
-					util.ListenWrite(opt, f)
+					util.ListenWriteBench(opt)
 					if err := benchRun(e1.src, opt); err != nil {
 						b.Fatalf("Compiler error: %s\n", err)
 					}
@@ -318,7 +318,7 @@ func BenchmarkAssemblerGeneration(b *testing.B) {
 			}
 			b.Run(fmt.Sprintf("%s-threads=%d", e1.name, i2), func(b *testing.B) {
 				for n := 0; n < b.N; n++ {
-					util.ListenWrite(opt, f)
+					util.ListenWriteBench(opt)
 					if err := backend.GenerateAssembler(opt, m, ir.Root); err != nil {
 						b.Fatalf("Could not generate assembler: %s\n", err)
 					}

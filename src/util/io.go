@@ -183,6 +183,45 @@ func ListenWrite(opt Options, f *os.File) {
 	}(wc, cc)
 }
 
+// ListenWriteBench is equal to ListenWrite, but it doesn't write the contents to the destination file.
+// This function is used for benchmarking, where writing multiple gigabytes to disk is undesirable.
+func ListenWriteBench(opt Options) {
+	if opt.Threads > 1 && !opt.LLVM && !opt.TokenStream {
+		// LLVM IR can't be output in parallel.
+		wc = make(chan string, opt.Threads+1)
+	} else {
+		wc = make(chan string, 1)
+	}
+	cc = make(chan error)
+
+	// Listen for input and termination signal.
+	go func(wc chan string, cc chan error) {
+		defer close(wc)
+		defer close(cc)
+		stop := false
+		for {
+			if stop {
+				// Got stop signal. Check for pending jobs.
+				sc.Lock()
+				if sc.writing == 0 && sc.active == 0 {
+					// No more jobs, no active writers: close the listener and tell
+					// the main thread over the close channel.
+					sc.Unlock()
+					cc <- nil
+					return // Stop the listener writer go routine.
+				}
+				sc.Unlock()
+			}
+			select {
+			case _ = <-wc:
+				sc.subWriteOperation()
+			case <-cc:
+				stop = true
+			}
+		}
+	}(wc, cc)
+}
+
 // Close sends the termination signal to the writer listener.
 func Close() {
 	cc <- nil // Send close signal to writer listener.
