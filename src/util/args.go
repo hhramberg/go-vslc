@@ -72,7 +72,9 @@ const (
 
 // ParseArgs parses command line arguments.
 func ParseArgs() (Options, error) {
-	opt := Options{}
+	opt := Options{
+		TargetArch: Aarch64,
+	}
 	if len(os.Args) < 2 {
 		return opt, nil
 	}

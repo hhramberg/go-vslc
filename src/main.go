@@ -36,7 +36,7 @@ func run(opt util.Options) error {
 
 	// Generate syntax tree by lexing and parsing source code.
 	if err := frontend.Parse(src); err != nil {
-		return fmt.Errorf("parse error: %s\n", err)
+		return err
 	}
 
 	// Optimise syntax tree.

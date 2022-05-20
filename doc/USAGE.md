@@ -1,11 +1,40 @@
 # Usage
 
+## Prerequisites
+
+1. llvm toolchain, preferable LLVM 13
+2. llvm-devel toolchain, preferable LLVM 13
+3. gcc compiler framework with C++ compiler support
+4. go compiler and runtime (this software was developed on go 1.15.2)
+
 ## Installation
+
+### Download the source files.
+
+```bash
+gi clone github.com/hhramberg/go-vslc
+```
+
+### Configure the C-bindings for Go
+
+Follow the instructions on how to prepare the system for using the [C-bindings for Go](https://github.com/tinygo-org/go-llvm) 
+by reading the Usage section.
+
+### Compile the vslc compiler
+
+Move into the `src` folder of the `go-vslc` repository.
+The below snippet will install the `vslc` compiler into the directory `/path/to/put/compiler/vslc`.
+
+```bash
+cd go-vslc/src
+go build -o /path/to/put/compiler/vslc
+```
 
 ## Usage
 
 `vslc` is called similarly to GCC compilers. Flags and arguments precede the file to compile. Only a single VSL file
-may be compiled per call.
+may be compiled per call. Mind you, the argument parser is simple, a filename must always be provided as the final 
+argument, even when passing the --version or --help flags.
 
 ```bash
 vslc [FLAG [ARGUMENT] ...] file
@@ -24,7 +53,7 @@ accepted ranges.
 |-o|Path to and file name of output file. If no output path is provided the compiler will write the resulting assembler to `stdout` or `app.out` for binaries.| |`stdout` or `app.out`|
 |-ll|Use the LLVM backend to optimise and generate code.|||
 |-t|Number of threads to run in parallel.|[1, 64]|1|
-|-target|Set output architecture type.|{aarch64, riscv}|aarch64|
+|-arch|Set output architecture type. Only one architecture is supported.|aarch64|aarch64|
 |-ts|Output the tokens of the source code and exit.|||
 |-v, -version, --v, --version|Prints application version and exits the application.|||
 |-vb|Verbose mode. Include flag to log verbose compiler status messages to stdout.|||

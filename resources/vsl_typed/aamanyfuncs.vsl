@@ -1,5 +1,5 @@
 //
-// This file provides a VSL file with many functions for parallel the compilator to compile.
+// This file provides a VSL file with many functions for parallel the compiler to compile.
 // The program isn't supposed to make sense, but there should be many functions with long bodies.
 
 def tester() int

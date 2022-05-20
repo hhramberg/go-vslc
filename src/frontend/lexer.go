@@ -114,8 +114,15 @@ func newLexer(src string, start stateFunc) *lexer {
 // on the lexer's items channel.
 func (l *lexer) run() {
 	defer close(l.items)
+	defer close(l.err)
 	for state := l.state; state != nil; {
-		state = state(l)
+		select {
+		case err := <-l.err:
+			fmt.Printf("Syntax error: %s\n", err)
+			return
+		default:
+			state = state(l)
+		}
 	}
 }
 

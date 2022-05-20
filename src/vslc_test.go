@@ -31,8 +31,11 @@ type benchType struct {
 // ----- Constants ------
 // ----------------------
 
-// p defines the maximum number of parallel threads to pass to the compiler.
-const p = 4
+// p defines the minimum number of parallel threads to pass to the compiler.
+const p = 1
+
+// q defines the maximum number of parallel threads to pass to the compiler.
+const q = 4
 
 // --------------------
 // ----- Globals ------
@@ -79,15 +82,9 @@ func BenchmarkAarch64(b *testing.B) {
 	for _, e1 := range benchmarks {
 		opt.Out = e1.out
 
-		// Test for 1 to p parallel worker go routines.
-		for i2 := 1; i2 <= p; i2++ {
+		// Test for 1 to q parallel worker go routines.
+		for i2 := p; i2 <= q; i2++ {
 			opt.Threads = i2
-
-			// Attempt to open output file. Create new file if necessary.
-			f, err := os.OpenFile(opt.Out, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				b.Fatalf("I/O error, could not open/create destination file: %s\n", err)
-			}
 			b.Run(fmt.Sprintf("%s-threads=%d", e1.name, i2), func(b *testing.B) {
 				for n := 0; n < b.N; n++ {
 					util.ListenWriteBench(opt)
@@ -97,18 +94,8 @@ func BenchmarkAarch64(b *testing.B) {
 					util.Close()
 				}
 			})
-
-			// Close the destination file.
-			err = f.Close()
-			if err != nil {
-				b.Fatalf("I/O error, could not close destination file: %s\n", err)
-			}
 		}
 	}
-
-	b.Cleanup(func() {
-		helperDeleteFiles(dstp, files, b)
-	})
 }
 
 // BenchmarkASTOptimisation benchmarks the frontend.Optimise function that optimises the parse tree.
@@ -142,8 +129,8 @@ func BenchmarkASTOptimisation(b *testing.B) {
 	for _, e1 := range benchmarks {
 		opt.Out = e1.out
 
-		// Test for 1 to p parallel worker go routines.
-		for i2 := 1; i2 <= p; i2++ {
+		// Test for 1 to q parallel worker go routines.
+		for i2 := p; i2 <= q; i2++ {
 			opt.Threads = i2
 			b.Run(fmt.Sprintf("%s-threads=%d", e1.name, i2), func(b *testing.B) {
 				for n := 0; n < b.N; n++ {
@@ -188,8 +175,8 @@ func BenchmarkLIRGeneration(b *testing.B) {
 	for _, e1 := range benchmarks {
 		opt.Out = e1.out
 
-		// Test for 1 to p parallel worker go routines.
-		for i2 := 1; i2 <= p; i2++ {
+		// Test for 1 to q parallel worker go routines.
+		for i2 := p; i2 <= q; i2++ {
 			opt.Threads = i2
 			if err := frontend.Parse(e1.src); err != nil {
 				b.Fatalf("Could not parse syntax tree: %s\n", err)
@@ -239,8 +226,8 @@ func BenchmarkRegisterAllocation(b *testing.B) {
 	for _, e1 := range benchmarks {
 		opt.Out = e1.out
 
-		// Test for 1 to p parallel worker go routines.
-		for i2 := 1; i2 <= p; i2++ {
+		// Test for 1 to q parallel worker go routines.
+		for i2 := p; i2 <= q; i2++ {
 			opt.Threads = i2
 			if err := frontend.Parse(e1.src); err != nil {
 				b.Fatalf("Could not parse syntax tree: %s\n", err)
@@ -294,15 +281,9 @@ func BenchmarkAssemblerGeneration(b *testing.B) {
 	for _, e1 := range benchmarks {
 		opt.Out = e1.out
 
-		// Test for 1 to p parallel worker go routines.
-		for i2 := 1; i2 <= p; i2++ {
+		// Test for 1 to q parallel worker go routines.
+		for i2 := p; i2 <= q; i2++ {
 			opt.Threads = i2
-
-			// Attempt to open output file. Create new file if necessary.
-			f, err := os.OpenFile(opt.Out, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				b.Fatalf("I/O error, could not open/create destination file: %s\n", err)
-			}
 			if err := frontend.Parse(e1.src); err != nil {
 				b.Fatalf("Could not parse syntax tree: %s\n", err)
 			}
@@ -325,17 +306,8 @@ func BenchmarkAssemblerGeneration(b *testing.B) {
 					util.Close()
 				}
 			})
-
-			// Close the destination file.
-			err = f.Close()
-			if err != nil {
-				b.Fatalf("I/O error, could not close destination file: %s\n", err)
-			}
 		}
 	}
-	b.Cleanup(func() {
-		helperDeleteFiles(dstp, files, b)
-	})
 }
 
 // benchRun runs the compiler, exactly like the run function, but without reading the source code.

@@ -1,5 +1,9 @@
 # Benchmarking
 
+This file presents the benchmarking procedure and select results of the `go-vslc` compiler.
+
+> Results for the hash comparison can be viewed in the Git repository located at: https://github.com/hhramberg/hashComparison
+
 ## Experimental setup
 
 The below table list two test system's hardware specifications and operating system configuration.
@@ -7,14 +11,14 @@ The below table list two test system's hardware specifications and operating sys
 |Callsign|Hardware type|CPU|RAM|OS|Description|
 |---|---|---|---|---|---|
 |laptop|Lenovo laptop|Intel Core i5-3320M|8 GB|Manjaro Linux 250-4-2 (kernel: 5.4.188-1-MANJARO)|Development system|
-|server|HPE ProLiant DL360|2x Intel Xeon X5560|16 GB|VMWare ESXi 6.5|Hypervisor|
+|server|HPE ProLiant DL360|2x Intel Xeon E5630|16 GB|VMWare ESXi 6.5|Hypervisor|
 
 For the server callsign system I have created the following virtual machine which will be used
 for testing.
 
 |Callsign|Hardware type|CPU|RAM|OS|Description|
 |---|---|---|---|---|---|
-|vm|Virtual machine|8x vCPU|8 GB|Centos 8||
+|vm|ESXi 6.5 virtual machine|16 vCPUs|2 GB|Centos 8 Stream||
 
 The callsign `vm` has been allocated all the CPU resources of the hypervisor, with the remaining virtual machines
 shutdown. Although hypervisors grants the flexibility of testing differently equipped computers with
@@ -52,27 +56,11 @@ There are 5 defined benchmarks.
 
 ## Results
 
+> Results for the hash comparison can be viewed in the Git repository located at: https://github.com/hhramberg/hashComparison
 
-|Callsign|t|Result|
-|---|---|---|
-|laptop|1||
-|laptop|2||
-|laptop|3||
-|laptop|4||
-|laptop|5||
-|laptop|6||
-|laptop|7||
-|laptop|8||
-|laptop|9||
-|laptop|10||
-|laptop|11||
-|laptop|12||
-|laptop|13||
-|laptop|14||
-|laptop|15||
-|laptop|16||
 
-*`t` is the number of parallel task the compiler is allowed to run, and is equal to passing
-the -t flag to the compiler.*
+Results for the parallel compiler benchmark is located in [bench.csv](bench.csv).
 
-*`n` is the number of iterations the test was run.*
+Older results, from a more excessive benchmark suite with almost 100% source file coverage
+can be found at [bench_old_all_missing_some.ods](bench_old_all_missing_some.ods) (LibreOffice Calc file). Do note
+that the source file coverage is incomplete.

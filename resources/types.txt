@@ -3,13 +3,12 @@ Defined types:
 DATATYPE    BIT SIZE    ABBREVIATION
 integer     64          int
 float       64          float
-boolean     64          bool
 
 With regard to assignment:
 
 ASSIGNMENT          RESULT
-int := float        Not allowed
-float := int        float
+int := float        int (cast)
+float := int        float (cast)
 
 With regard to expressions:
 
@@ -76,26 +75,26 @@ int >= int          int
 int <= int          int
 int = int           int
 
-float && float      ???
-float || float      ???
-float < float       ???
-float > float       ???
-float >= float      ???
-float <= float      ???
-float = float       ???
+float && float      Not allowed
+float || float      Not allowed
+float < float       Not allowed
+float > float       Not allowed
+float >= float      Not allowed
+float <= float      Not allowed
+float = float       float
 
-int && float        ???
-int || float        ???
-int < float         ???
-int > float         ???
-int >= float        ???
-int <= float        ???
-int = float         ???
+int && float        Not allowed
+int || float        Not allowed
+int < float         Not allowed
+int > float         Not allowed
+int >= float        Not allowed
+int <= float        Not allowed
+int = float         int (cast)
 
-float && int        ???
-float || int        ???
-float < int         ???
-float > int         ???
-float >= int        ???
-float <= int        ???
-float = int         ???
+float && int        Not allowed
+float || int        Not allowed
+float < int         Not allowed
+float > int         Not allowed
+float >= int        Not allowed
+float <= int        Not allowed
+float = int         float (cast)
