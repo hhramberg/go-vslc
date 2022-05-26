@@ -699,7 +699,9 @@ func genDeclarationGlobal(m llvm.Module, n *ast.Node) error {
 		}
 
 		// Create global variable and add it to the global symbol table.
-		globals.m[name] = llvm.AddGlobal(m, typ, name)
+		g := llvm.AddGlobal(m, typ, name)
+		g.SetInitializer(g)
+		globals.m[name] = g
 		globals.Unlock()
 	}
 	return nil
