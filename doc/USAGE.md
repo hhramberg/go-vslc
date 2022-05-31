@@ -20,6 +20,19 @@ gi clone github.com/hhramberg/go-vslc
 Follow the instructions on how to prepare the system for using the [C-bindings for Go](https://github.com/tinygo-org/go-llvm) 
 by reading the Usage section.
 
+#### I cannot configure the C-bindings
+
+The update-script in the tinygo-library might point to a deprecated LLVM URL. If you're unable to configure the
+C-bindings do the following.
+
+1. Locate the path of your system's `GOPATH` by running the following command.
+```bash
+go env 
+```
+2. Change directory to the tinygo module, likely located in `%GOPATH%/pkg/mod/tinygo.org/x/go-llvm`.
+3. Copy the ZIP-file `resourcs/tinygo_fix.zip` from the `go-vslc` project, unzip and replace the contents of the existing tinygo folder.
+4. Now you have correctly configured C-bindings for LLVM 13 on linux-amd-64.
+
 ### Compile the vslc compiler
 
 Move into the `src` folder of the `go-vslc` repository.
@@ -56,4 +69,4 @@ accepted ranges.
 |-arch|Set output architecture type. Only one architecture is supported.|aarch64|aarch64|
 |-ts|Output the tokens of the source code and exit.|||
 |-v, -version, --v, --version|Prints application version and exits the application.|||
-|-vb|Verbose mode. Include flag to log verbose compiler status messages to stdout.|||
+|-vb|Verbose mode. Include flag to log verbose compiler status messages to stdout, such as AST and SSA.|||

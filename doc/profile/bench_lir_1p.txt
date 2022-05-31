@@ -1,0 +1,7 @@
+goos: linux
+goarch: amd64
+pkg: vslc/src
+cpu: Intel(R) Xeon(R) CPU           E5630  @ 2.53GHz
+BenchmarkLIRGeneration/aamanyfuncs.vsl-threads=1-16         	     667	   1676859 ns/op	  384219 B/op	    3787 allocs/op
+PASS
+ok  	vslc/src	1.549s

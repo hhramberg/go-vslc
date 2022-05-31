@@ -11,7 +11,7 @@ the [VSL](http://www.jeremybennett.com/publications/index.html)
 compiler the project examines *functional level parallelism* and other features that benefits from the ease of parallel
 code generation of the Go programming language.
 
-**If you are looking for how to use the compiler please see
+**If you are looking for how to use/install the compiler, please see
 [USAGE.md](doc/USAGE.md).**
 
 **[scrips.md](doc/scripts.md) contain descriptions of the bundled test and benchmarking scripts.**

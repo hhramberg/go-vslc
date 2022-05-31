@@ -114,6 +114,7 @@ func main() {
 			util.ListenWrite(opt, nil)
 		}
 	}
+
 	ret := 0
 	if err := run(opt); err != nil {
 		fmt.Printf("Error: %s\n", err)

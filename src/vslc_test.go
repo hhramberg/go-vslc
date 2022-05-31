@@ -35,7 +35,7 @@ type benchType struct {
 const p = 1
 
 // q defines the maximum number of parallel threads to pass to the compiler.
-const q = 4
+const q = 16
 
 // --------------------
 // ----- Globals ------
