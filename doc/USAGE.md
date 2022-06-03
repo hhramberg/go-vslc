@@ -12,7 +12,7 @@
 ### Download the source files.
 
 ```bash
-gi clone github.com/hhramberg/go-vslc
+git clone github.com/hhramberg/go-vslc
 ```
 
 ### Configure the C-bindings for Go
